@@ -97,7 +97,7 @@ final class DugaApiClient
      */
     private function acquireRateLimitLock()
     {
-        $handle = @fopen(sys_get_temp_dir() . '/pinkclub-fd-duga-api.lock', 'c+');
+        $handle = @fopen(sys_get_temp_dir() . '/pinkclub-dl-duga-api.lock', 'c+');
         if ($handle === false || !@flock($handle, LOCK_EX)) {
             if (is_resource($handle)) {
                 @fclose($handle);
