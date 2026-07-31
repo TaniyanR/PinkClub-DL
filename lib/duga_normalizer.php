@@ -152,7 +152,7 @@ final class DugaNormalizer
             $maker = self::string($row['makername'] ?? null);
             $makers = $maker === null ? [] : [['id' => '', 'name' => $maker, 'ruby' => null]];
             $raw = $row;
-            // PinkClub-FDではパッケージ画像を保存・表示せず、cap画像だけを使用します。
+            // PinkClub-DLではパッケージ画像を保存・表示せず、cap画像だけを使用します。
             unset($raw['posterimage'], $raw['jacketimage']);
             $raw['content_id'] = $productId;
             $raw['product_id'] = $productId;
