@@ -141,10 +141,9 @@ final class DugaNormalizer
                 continue;
             }
 
-            $poster = is_array($row['posterimage'] ?? null) ? $row['posterimage'] : [];
-            $jacket = is_array($row['jacketimage'] ?? null) ? $row['jacketimage'] : [];
             $movie = self::sampleMovie($row);
             $sampleImages = self::sampleImages($row['thumbnail'] ?? []);
+            $primarySampleImage = $sampleImages[0] ?? null;
             $performers = self::namedList($row['performer'] ?? []);
             $genres = self::namedList($row['category'] ?? []);
             $series = self::namedList($row['series'] ?? []);
@@ -153,6 +152,8 @@ final class DugaNormalizer
             $maker = self::string($row['makername'] ?? null);
             $makers = $maker === null ? [] : [['id' => '', 'name' => $maker, 'ruby' => null]];
             $raw = $row;
+            // PinkClub-FDではパッケージ画像を保存・表示せず、cap画像だけを使用します。
+            unset($raw['posterimage'], $raw['jacketimage']);
             $raw['content_id'] = $productId;
             $raw['product_id'] = $productId;
             $raw['maker_product'] = self::string($row['itemno'] ?? null);
@@ -194,9 +195,9 @@ final class DugaNormalizer
                 'review_average' => isset($review['rating']) ? (float)$review['rating'] : null,
                 'url' => self::url($row['url'] ?? null),
                 'affiliate_url' => self::url($row['affiliateurl'] ?? null),
-                'image_list' => self::url($poster['midium'] ?? $poster['medium'] ?? $poster['small'] ?? null),
-                'image_small' => self::url($jacket['small'] ?? $poster['small'] ?? null),
-                'image_large' => self::url($jacket['large'] ?? $jacket['midium'] ?? $jacket['medium'] ?? $poster['large'] ?? null),
+                'image_list' => $primarySampleImage,
+                'image_small' => $primarySampleImage,
+                'image_large' => $primarySampleImage,
                 'sample_movie_url_476' => $movie['movie'],
                 'sample_movie_url_560' => $movie['movie'],
                 'sample_movie_url_644' => $movie['movie'],
@@ -220,3 +221,4 @@ final class DugaNormalizer
         return $normalized;
     }
 }
+
