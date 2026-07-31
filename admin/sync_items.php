@@ -21,10 +21,14 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="admin-card">
   <h1>DUGA商品同期</h1>
-  <form method="post">
+  <form method="post" id="duga-manual-sync-form">
     <?= csrf_input() ?>
     <button type="submit">最新商品を同期</button>
   </form>
+  <div id="duga-manual-sync-progress" class="admin-notice admin-notice--success" style="display:none;margin-top:12px;" role="status" aria-live="polite">
+    <p style="margin-bottom:8px;">DUGA APIから取得中です。1秒に1回の制限を守っているため、そのままお待ちください。</p>
+    <progress style="width:100%;"></progress>
+  </div>
 </section>
 
 <section class="admin-card">
@@ -36,4 +40,20 @@ require __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </table>
 </section>
+<script>
+(() => {
+  const form = document.getElementById('duga-manual-sync-form');
+  const progress = document.getElementById('duga-manual-sync-progress');
+  if (!form || !progress) return;
+  form.addEventListener('submit', () => {
+    progress.style.display = 'block';
+    const button = form.querySelector('button[type="submit"]');
+    if (button) {
+      button.disabled = true;
+      button.textContent = '取得中…';
+    }
+  });
+})();
+</script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
+
