@@ -1,4 +1,4 @@
-# PinkClub-FD
+# PinkClub-DL
 
 DUGAアフィリエイト商品を紹介する、軽量な商品サイトです。
 
