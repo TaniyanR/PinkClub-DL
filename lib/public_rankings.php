@@ -109,7 +109,7 @@ function pcf_public_ranking_item_score_sql(): string
 function pcf_public_ranking_sql(string $type, string $scoreSql, int $limit): string
 {
     if ($type !== 'items') {
-        throw new InvalidArgumentException('PinkClub-FD supports item rankings only.');
+        throw new InvalidArgumentException('PinkClub-DL supports item rankings only.');
     }
 
     return 'SELECT scores.id, scores.content_id, scores.title,
