@@ -537,7 +537,7 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
 .rail-row--tall-cards .rail-card .rail-card__noimage{height:340px !important}
 .rail-row--tall-cards.rail-row--wide-thumb .rail-card .thumb{aspect-ratio:auto;height:340px;object-fit:cover}
 
-/* PinkClub-FD: fixed 4 x 8 product grid without horizontal scrolling */
+/* PinkClub-DL: fixed 4 x 8 product grid without horizontal scrolling */
 .pinkclub-fl-product-grid{
   display:grid;
   grid-template-columns:repeat(4,minmax(0,1fr));
