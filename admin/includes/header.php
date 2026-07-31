@@ -60,7 +60,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
 <input class="admin-menu-toggle" type="checkbox" id="admin-menu-toggle" hidden>
 <header class="admin-topbar">
   <label class="admin-menu-toggle__button" for="admin-menu-toggle" aria-label="管理メニューを開閉">☰</label>
-  <div class="admin-topbar__brand"><a href="<?= e(admin_url('index.php')) ?>">PinkClub-FD 管理</a></div>
+  <div class="admin-topbar__brand"><a href="<?= e(admin_url('index.php')) ?>">PinkClub-DL 管理</a></div>
   <div class="admin-topbar__right">
     <a href="<?= e(public_url('')) ?>" target="_blank" rel="noopener noreferrer">フロント表示</a>
     <span class="admin-topbar__separator" aria-hidden="true"> | </span>
