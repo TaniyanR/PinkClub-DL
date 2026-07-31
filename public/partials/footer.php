@@ -32,7 +32,7 @@ if ($siteName === '') {
     $siteName = trim($safeTextSetting('site.title', ''));
 }
 if ($siteName === '') {
-    $siteName = 'PinkClub-FD';
+    $siteName = 'PinkClub-DL';
 }
 
 $copyrightStartYear = (int)date('Y');
