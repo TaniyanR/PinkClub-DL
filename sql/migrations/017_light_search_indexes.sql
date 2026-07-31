@@ -1,6 +1,6 @@
 SET NAMES utf8mb4;
 
--- PinkClub-FDの共通検索は商品IDから関連名を照合する。
+-- PinkClub-DLの共通検索は商品IDから関連名を照合する。
 -- 各関連テーブルに item_id 先頭の索引を用意し、商品ごとのEXISTS検索を軽量化する。
 
 SET @table_name := 'item_actresses';
