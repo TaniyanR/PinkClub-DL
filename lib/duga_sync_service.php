@@ -37,9 +37,6 @@ class DugaSyncService
         $reachedEnd = false;
 
         $fetchAndSave = function (int $requestOffset, bool $advancePastOffset) use (
-            $siteCode,
-            $serviceCode,
-            $floorCode,
             $extraParams,
             $excludeKeywords,
             $hitLimit,
@@ -124,8 +121,6 @@ class DugaSyncService
 
             return $fetchedCount;
         };
-
-        $fetchAndSave(1, false);
 
         while ($newCount < $targetNew && $checkedCount < $maxChecked && !$reachedEnd) {
             $fetchAndSave($currentOffset, true);
@@ -355,3 +350,4 @@ class DugaSyncService
 
     }
 }
+
