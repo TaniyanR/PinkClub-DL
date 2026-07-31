@@ -168,7 +168,7 @@ require __DIR__ . '/includes/header.php';
     </div>
   <?php endif; ?>
 
-  <form method="post" class="stack" style="max-width:700px;">
+  <form method="post" class="stack" style="max-width:700px;" id="duga-api-settings-form">
     <?= csrf_input() ?>
     <div>
       <label>アプリケーションID<br><input type="password" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
@@ -184,6 +184,10 @@ require __DIR__ . '/includes/header.php';
       <button type="submit" name="action" value="test_save" class="button-secondary"><?= e($testButtonLabel) ?></button>
     </div>
   </form>
+  <div id="duga-api-progress" class="admin-notice admin-notice--success" style="display:none;margin-top:12px;" role="status" aria-live="polite">
+    <p style="margin-bottom:8px;">DUGA APIから取得中です。1秒に1回の制限を守っているため、そのままお待ちください。</p>
+    <progress style="width:100%;"></progress>
+  </div>
   <p style="margin-top:12px;"><small>アプリケーションIDはGitHubのファイルへ書かず、この画面から保存してください。</small></p>
 
   <?php if (is_array($testResult)): ?>
@@ -239,4 +243,19 @@ require __DIR__ . '/includes/header.php';
     <?php endif; ?>
   <?php endif; ?>
 </section>
+<script>
+(() => {
+  const form = document.getElementById('duga-api-settings-form');
+  const progress = document.getElementById('duga-api-progress');
+  if (!form || !progress) return;
+  form.addEventListener('submit', (event) => {
+    const submitter = event.submitter;
+    if (!submitter || submitter.value !== 'test_save') return;
+    progress.style.display = 'block';
+    submitter.disabled = true;
+    submitter.textContent = '取得中…';
+  });
+})();
+</script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
+
