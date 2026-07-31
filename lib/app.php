@@ -105,7 +105,8 @@ function duga_client_for_type(string $apiType): DugaApiClient
         (string)($cred['api_id'] ?? ''),
         (string)($cred['affiliate_id'] ?? ''),
         (string)($settings['banner_id'] ?? '01'),
-        $endpoint
+        $endpoint,
+        defined('BASE_URL') ? rtrim((string)BASE_URL, '/') . '/' : ''
     );
 }
 
@@ -118,3 +119,4 @@ function duga_sync_service(?string $apiType = null): DugaSyncService
 {
     return new DugaSyncService($apiType === null ? duga_client_from_settings() : duga_client_for_type($apiType), db());
 }
+
