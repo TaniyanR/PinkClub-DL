@@ -25,7 +25,7 @@ return [
         'debug' => false,
     ],
     'site' => [
-        'title' => 'PinkClub-FD',
+        'title' => 'PinkClub-DL',
         // 例: 'https://example.com'（末尾スラッシュなし）
         'base_url' => '',
     ],
