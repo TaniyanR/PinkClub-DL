@@ -47,7 +47,7 @@ $pageTitle = 'パスワード再設定';
 include __DIR__ . '/partials/login_header.php';
 ?>
 <div class="login-page">
-    <div class="login-headline"><span class="login-headline__item">PinkClub-FD</span><span class="login-headline__item">パスワード再設定</span></div>
+    <div class="login-headline"><span class="login-headline__item">PinkClub-DL</span><span class="login-headline__item">パスワード再設定</span></div>
     <?php if ($error !== '') : ?><div class="admin-card login-alert"><p><?php echo e($error); ?></p></div><?php endif; ?>
     <form class="admin-card login-card" method="post" action="<?php echo e(public_url('reset_password.php') . '?token=' . rawurlencode($token)); ?>">
         <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
