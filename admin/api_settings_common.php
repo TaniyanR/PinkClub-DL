@@ -160,7 +160,7 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="card">
   <h1><?= e($pageTitle) ?></h1>
-  <p>PinkClub-FDではDUGAの商品検索APIだけを使用します。ここで商品取得用のアプリケーションID・代理店ID・バナーIDを設定します。</p>
+  <p>PinkClub-DLではDUGAの商品検索APIだけを使用します。ここで商品取得用のアプリケーションID・代理店ID・バナーIDを設定します。</p>
 
   <?php if ($message !== ''): ?>
     <div class="admin-notice <?= $messageType === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>">
