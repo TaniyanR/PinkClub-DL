@@ -8,7 +8,8 @@ final class DugaApiClient
         private readonly string $appId,
         private readonly string $agentId,
         private readonly string $bannerId,
-        private readonly string $endpoint
+        private readonly string $endpoint,
+        private readonly string $referer
     ) {
     }
 
@@ -37,8 +38,14 @@ final class DugaApiClient
             return $cached;
         }
 
+        $rateLimitLock = $this->acquireRateLimitLock();
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        if ($ch === false) {
+            $this->releaseRateLimitLock($rateLimitLock);
+            throw new RuntimeException('DUGA API接続の初期化に失敗しました。');
+        }
+
+        $curlOptions = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => 30,
@@ -46,9 +53,14 @@ final class DugaApiClient
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
-        ]);
+        ];
+        if (filter_var($this->referer, FILTER_VALIDATE_URL) !== false) {
+            $curlOptions[CURLOPT_REFERER] = $this->referer;
+        }
+        curl_setopt_array($ch, $curlOptions);
 
         $response = curl_exec($ch);
+        $this->releaseRateLimitLock($rateLimitLock);
         if ($response === false) {
             $error = curl_error($ch);
             curl_close($ch);
@@ -75,6 +87,51 @@ final class DugaApiClient
         }
 
         return $decoded;
+    }
+
+    /**
+     * DUGAの利用制限に合わせ、複数の画面やcronが重なっても
+     * APIリクエストの開始間隔が1秒未満にならないようにします。
+     *
+     * @return resource|null
+     */
+    private function acquireRateLimitLock()
+    {
+        $handle = @fopen(sys_get_temp_dir() . '/pinkclub-fd-duga-api.lock', 'c+');
+        if ($handle === false || !@flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) {
+                @fclose($handle);
+            }
+            // ロックファイルを使えない環境でも1秒間隔を守ります。
+            usleep(1000000);
+            return null;
+        }
+
+        rewind($handle);
+        $lastRequestAt = (float)trim((string)stream_get_contents($handle));
+        $waitMicroseconds = (int)ceil((1.0 - (microtime(true) - $lastRequestAt)) * 1000000);
+        if ($lastRequestAt > 0 && $waitMicroseconds > 0) {
+            usleep($waitMicroseconds);
+        }
+
+        rewind($handle);
+        ftruncate($handle, 0);
+        fwrite($handle, sprintf('%.6F', microtime(true)));
+        fflush($handle);
+
+        return $handle;
+    }
+
+    /**
+     * @param resource|null $handle
+     */
+    private function releaseRateLimitLock($handle): void
+    {
+        if (!is_resource($handle)) {
+            return;
+        }
+        @flock($handle, LOCK_UN);
+        @fclose($handle);
     }
 
     private function maskSensitiveParams(array $query): array
@@ -150,3 +207,4 @@ final class DugaApiClient
         }
     }
 }
+
