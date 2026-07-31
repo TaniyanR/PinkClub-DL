@@ -35,8 +35,8 @@ function normalize_configured_base_url(string $value): string
  * Resolve application base path from the current script location.
  *
  * Examples:
- * - /pinkclub-fd/public/index.php                => /pinkclub-fd
- * - /pinkclub-fd/admin/index.php                 => /pinkclub-fd
+ * - /pinkclub-dl/public/index.php                => /pinkclub-dl
+ * - /pinkclub-dl/admin/index.php                 => /pinkclub-dl
  */
 function detect_base_path(string $scriptName): string
 {
@@ -69,7 +69,7 @@ function detect_base_path(string $scriptName): string
 
 /**
  * Some servers expose SCRIPT_NAME as `/index.php` even when the app runs from a
- * subdirectory (e.g. `/pinkclub-fd/public/`). In that case infer the base
+ * subdirectory (e.g. `/pinkclub-dl/public/`). In that case infer the base
  * path from REQUEST_URI.
  */
 function detect_base_path_from_request_uri(string $requestUri): string
@@ -104,7 +104,7 @@ function detect_base_path_from_request_uri(string $requestUri): string
 
 /**
  * If BASE_URL is configured without a path (e.g. https://example.com),
- * and we detected the app is running under a subdirectory (e.g. /pinkclub-fd),
+ * and we detected the app is running under a subdirectory (e.g. /pinkclub-dl),
  * append the detected path. If BASE_URL already contains a non-root path,
  * do not modify it.
  */
@@ -152,7 +152,7 @@ if ($configuredBaseUrl !== '') {
 }
 
 if (!defined('APP_NAME')) {
-    define('APP_NAME', 'PinkClub-FD');
+    define('APP_NAME', 'PinkClub-DL');
 }
 if (!defined('BASE_URL')) {
     define('BASE_URL', $baseUrl);
@@ -194,7 +194,7 @@ if (is_file($localConfigPath)) {
 return [
     'db' => $dbConfig,
     'security' => [
-        'session_name' => 'pinkclub_duga_session',
+        'session_name' => 'pinkclub_dl_session',
     ],
     'duga' => [
         'endpoint' => 'https://api.duga.jp/search',
