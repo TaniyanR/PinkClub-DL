@@ -1,6 +1,6 @@
 SET NAMES utf8mb4;
 
--- PinkClub-FDの各名称一覧を、商品API由来の関連テーブルから軽量に作るための索引。
+-- PinkClub-DLの各名称一覧を、商品API由来の関連テーブルから軽量に作るための索引。
 
 SET @table_name := 'item_actresses';
 SET @index_name := 'idx_light_actress_name_item';
