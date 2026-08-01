@@ -37,7 +37,16 @@ final class DugaNormalizer
 
         $rows = [];
         $seen = [];
-        foreach (self::list($value) as $entry) {
+        $queue = self::list($value);
+        while ($queue !== []) {
+            $entry = array_shift($queue);
+            if (is_array($entry) && array_key_exists($container, $entry)) {
+                foreach (self::list($entry[$container]) as $nested) {
+                    $queue[] = $nested;
+                }
+                continue;
+            }
+
             if (is_string($entry)) {
                 $id = '';
                 $name = trim($entry);
@@ -105,7 +114,13 @@ final class DugaNormalizer
     private static function sampleMovie(array $row): array
     {
         $sample = is_array($row['samplemovie'] ?? null) ? $row['samplemovie'] : [];
+        if (array_is_list($sample)) {
+            $sample = is_array($sample[0] ?? null) ? $sample[0] : [];
+        }
         $medium = $sample['midium'] ?? $sample['medium'] ?? $sample;
+        if (is_array($medium) && array_is_list($medium)) {
+            $medium = is_array($medium[0] ?? null) ? $medium[0] : [];
+        }
         if (!is_array($medium)) {
             $medium = [];
         }
@@ -179,6 +194,9 @@ final class DugaNormalizer
 
             $price = self::string($row['price'] ?? null);
             $review = is_array($row['review'] ?? null) ? $row['review'] : [];
+            if (array_is_list($review)) {
+                $review = is_array($review[0] ?? null) ? $review[0] : [];
+            }
 
             $normalized[] = [
                 'raw' => $raw,
