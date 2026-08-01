@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/duga_api_client.php';
 require_once __DIR__ . '/duga_normalizer.php';
 require_once __DIR__ . '/repository.php';
+require_once __DIR__ . '/public_page_cache.php';
 
 class DugaSyncService
 {
@@ -58,11 +59,6 @@ class DugaSyncService
             $fetchedCount = count($fetchedItems);
             $apiCount += $fetchedCount;
             $checkedCount += $fetchedCount;
-            foreach ($fetchedItems as $fetchedItem) {
-                if (trim((string)($fetchedItem['sample_movie_url_720'] ?? '')) !== '') {
-                    $movieCount++;
-                }
-            }
             if ($fetchedCount === 0) {
                 $reachedEnd = true;
                 if ($advancePastOffset) {
@@ -114,6 +110,11 @@ class DugaSyncService
             }
 
             if ($saveItems !== []) {
+                foreach ($saveItems as $saveItem) {
+                    if (trim((string)($saveItem['sample_movie_url_720'] ?? '')) !== '') {
+                        $movieCount++;
+                    }
+                }
                 $this->saveItemsWithStats($saveItems, 'items', false);
                 $updatedCount += $saveUpdatedCount;
             }
@@ -146,6 +147,9 @@ class DugaSyncService
             $nextOffset
         );
         $this->logSync('items', 1, $newCount, $message);
+        if (($newCount > 0 || $updatedCount > 0) && function_exists('pcf_public_page_cache_clear')) {
+            pcf_public_page_cache_clear();
+        }
 
         return [
             'synced_count' => $newCount,
