@@ -111,22 +111,52 @@ final class DugaNormalizer
         return array_values(array_unique($images));
     }
 
+    private static function firstUrl(mixed $value): ?string
+    {
+        $url = self::url($value);
+        if ($url !== null) {
+            return $url;
+        }
+        if (!is_array($value)) {
+            return null;
+        }
+        foreach ($value as $child) {
+            $url = self::firstUrl($child);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+        return null;
+    }
+
+    private static function urlForKey(mixed $value, string $targetKey): ?string
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+        foreach ($value as $key => $child) {
+            if (is_string($key) && strtolower($key) === $targetKey) {
+                $url = self::firstUrl($child);
+                if ($url !== null) {
+                    return $url;
+                }
+            }
+        }
+        foreach ($value as $child) {
+            $url = self::urlForKey($child, $targetKey);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+        return null;
+    }
+
     private static function sampleMovie(array $row): array
     {
-        $sample = is_array($row['samplemovie'] ?? null) ? $row['samplemovie'] : [];
-        if (array_is_list($sample)) {
-            $sample = is_array($sample[0] ?? null) ? $sample[0] : [];
-        }
-        $medium = $sample['midium'] ?? $sample['medium'] ?? $sample;
-        if (is_array($medium) && array_is_list($medium)) {
-            $medium = is_array($medium[0] ?? null) ? $medium[0] : [];
-        }
-        if (!is_array($medium)) {
-            $medium = [];
-        }
+        $sample = $row['samplemovie'] ?? [];
         return [
-            'movie' => self::url($medium['movie'] ?? null),
-            'capture' => self::url($medium['capture'] ?? null),
+            'movie' => self::urlForKey($sample, 'movie'),
+            'capture' => self::urlForKey($sample, 'capture'),
         ];
     }
 
