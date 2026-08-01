@@ -140,13 +140,13 @@ final class DugaNormalizer
     private static function packageImage(array $row): ?string
     {
         foreach ([
-            'posterimage',
             'jacketimage',
-            'packageimage',
             'packageimagelarge',
+            'packageimage',
             'package',
             'jacket',
             'poster',
+            'posterimage',
         ] as $key) {
             $url = self::imageForKey($row, $key);
             if ($url !== null) {
