@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ' / 保存済み合計: ' . (string)$afterCount
                 . ' / 新規追加: ' . (string)$inserted
                 . ' / 更新: ' . (string)$updated
-                . ' / API動画あり: ' . (string)$movieCount
+                . ' / 保存対象の動画あり: ' . (string)$movieCount
                 . ' / sort: ' . $sort
                 . ' / 試行: ' . (string)$attempts
                 . ' / 次回offset: ' . (string)$nextOffset;
