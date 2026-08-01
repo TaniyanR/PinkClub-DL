@@ -362,19 +362,6 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
 .site-layout--rss-bottom .content-ad-row--rss-split > .content-ad-row__rss{flex:1 1 0;min-width:0}
 .sidebar{box-sizing:border-box;width:324px;min-width:324px;max-width:324px;flex:0 0 324px}
 .content{flex:1;min-width:0}
-.site-layout{
-  justify-content:center;
-}
-body:not(.admin-page):not(.login-page):not(.setup-page) .site-sidebar,
-body:not(.admin-page):not(.login-page):not(.setup-page) .sidebar{
-  display:none !important;
-}
-body:not(.admin-page):not(.login-page):not(.setup-page) .content,
-body:not(.admin-page):not(.login-page):not(.setup-page) .site-main{
-  width:100%;
-  max-width:1440px;
-  flex:0 1 1440px;
-}
 .header-site-name{font-size:12px;color:#646970;font-weight:700}
 .site-nav a.is-active{background:#ff4da6;color:#fff;text-decoration:none}
 .sidebar-ad-html img,.sidebar-ad-html iframe,.sidebar-ad-html video{max-width:100%;height:auto}
