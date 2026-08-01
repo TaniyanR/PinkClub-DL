@@ -120,6 +120,45 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   document.addEventListener('DOMContentLoaded', () => {
     const vrPattern = /(?:【|\[|［)?\s*VR\s*(?:】|\]|］)?/i;
 
+    const enableImageFallbacks = (root = document) => {
+      root.querySelectorAll('img[data-image-fallbacks]').forEach((img) => {
+        if (img.dataset.imageFallbackReady === '1') return;
+
+        let fallbacks = [];
+        try {
+          const parsed = JSON.parse(img.dataset.imageFallbacks || '[]');
+          if (Array.isArray(parsed)) {
+            fallbacks = parsed.map((url) => String(url || '').trim()).filter(Boolean);
+          }
+        } catch (_) {
+          fallbacks = [];
+        }
+
+        img.dataset.imageFallbackReady = '1';
+        if (!fallbacks.length) return;
+
+        let index = 0;
+        const useNextFallback = () => {
+          while (index < fallbacks.length && fallbacks[index] === img.currentSrc) {
+            index += 1;
+          }
+          if (index >= fallbacks.length) return;
+          const nextUrl = fallbacks[index];
+          index += 1;
+          img.src = nextUrl;
+          const link = img.closest('a[href]');
+          if (link && img.matches('[data-package-image="1"]')) {
+            link.href = nextUrl;
+          }
+        };
+
+        img.addEventListener('error', useNextFallback);
+        if (img.complete && img.naturalWidth === 0) {
+          useNextFallback();
+        }
+      });
+    };
+
     const itemIdFromLink = (link) => {
       try {
         const url = new URL(link.href, window.location.href);
@@ -188,6 +227,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
       movieArea.style.color = '';
     };
 
+    enableImageFallbacks();
     convertVrCards();
     replaceVrNoMovieWithPackage();
 
@@ -195,6 +235,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (!(node instanceof Element)) return;
+          enableImageFallbacks(node);
           if (node.matches('a[href*="item.php"]')) {
             convertVrCards(node.parentElement || node);
             return;
