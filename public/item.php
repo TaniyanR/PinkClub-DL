@@ -613,6 +613,8 @@ $packageImage = pcf_item_image(is_array($item) ? $item : []);
 if (str_starts_with($packageImage, 'data:image/svg+xml') || pcf_is_self_hosted_duga_image_url($packageImage)) {
     $packageImage = '';
 }
+$packageImageFallbacks = array_values(array_filter(pcf_item_image_candidates(is_array($item) ? $item : []), static fn($url): bool => trim((string)$url) !== '' && trim((string)$url) !== $packageImage));
+$packageImageFallbackAttr = $packageImageFallbacks !== [] ? ' data-image-fallbacks="' . e((string)json_encode($packageImageFallbacks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"' : '';
 
 $actressNames = array_values(array_filter(array_map(static fn($row) => trim((string)($row['name'] ?? '')), $actresses), static fn($name) => $name !== ''));
 $genreNames = array_values(array_filter(array_map(static fn($row) => trim((string)($row['name'] ?? '')), $genres), static fn($name) => $name !== ''));
@@ -700,7 +702,7 @@ require __DIR__ . '/partials/header.php';
     <div class="pcf-item-main__media" style="width:min(100%, 620px);">
       <?php if ($packageImage !== ''): ?>
       <a href="<?= e($packageImage) ?>" target="_blank" rel="noopener noreferrer">
-        <img class="pcf-detail__package" data-package-image="1" src="<?= e($packageImage) ?>" alt="<?= e((string)($item['title'] ?? '')) ?>" style="display:block; width:100%; height:auto;">
+        <img class="pcf-detail__package" data-package-image="1" src="<?= e($packageImage) ?>" alt="<?= e((string)($item['title'] ?? '')) ?>"<?= $packageImageFallbackAttr ?> style="display:block; width:100%; height:auto;">
       </a>
       <?php endif; ?>
       <?php if ($desc !== ''): ?><p><?= nl2br(e($desc)) ?></p><?php endif; ?>
