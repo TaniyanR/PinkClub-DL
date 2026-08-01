@@ -32,6 +32,7 @@ class DugaSyncService
         $updatedCount = 0;
         $excludedCount = 0;
         $checkedCount = 0;
+        $movieCount = 0;
         $maxChecked = 1000;
         $hitLimit = 100;
         $reachedEnd = false;
@@ -45,6 +46,7 @@ class DugaSyncService
             &$updatedCount,
             &$excludedCount,
             &$checkedCount,
+            &$movieCount,
             &$nextOffset,
             &$reachedEnd,
             $targetNew
@@ -56,6 +58,11 @@ class DugaSyncService
             $fetchedCount = count($fetchedItems);
             $apiCount += $fetchedCount;
             $checkedCount += $fetchedCount;
+            foreach ($fetchedItems as $fetchedItem) {
+                if (trim((string)($fetchedItem['sample_movie_url_720'] ?? '')) !== '') {
+                    $movieCount++;
+                }
+            }
             if ($fetchedCount === 0) {
                 $reachedEnd = true;
                 if ($advancePastOffset) {
@@ -147,6 +154,7 @@ class DugaSyncService
             'updated_count' => $updatedCount,
             'excluded_count' => $excludedCount,
             'checked_count' => $checkedCount,
+            'movie_count' => $movieCount,
             'next_offset' => $nextOffset,
             'message' => $message,
         ];

@@ -151,12 +151,47 @@ final class DugaNormalizer
         return null;
     }
 
+    private static function firstMovieFileUrl(mixed $value): ?string
+    {
+        $url = self::url($value);
+        if ($url !== null) {
+            $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?? ''));
+            if (preg_match('/\\.(?:mp4|m3u8|webm)$/', $path) === 1) {
+                return $url;
+            }
+        }
+        if (!is_array($value)) {
+            return null;
+        }
+        foreach ($value as $child) {
+            $url = self::firstMovieFileUrl($child);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+        return null;
+    }
+
     private static function sampleMovie(array $row): array
     {
-        $sample = $row['samplemovie'] ?? [];
+        $sample = null;
+        foreach ($row as $key => $value) {
+            $normalizedKey = is_string($key) ? strtolower(str_replace(['_', '-'], '', $key)) : '';
+            if ($normalizedKey === 'samplemovie') {
+                $sample = $value;
+                break;
+            }
+        }
+
+        $searchRoot = $sample ?? $row;
+        $movie = self::urlForKey($searchRoot, 'movie');
+        if ($movie === null) {
+            $movie = self::firstMovieFileUrl($searchRoot);
+        }
+
         return [
-            'movie' => self::urlForKey($sample, 'movie'),
-            'capture' => self::urlForKey($sample, 'capture'),
+            'movie' => $movie,
+            'capture' => self::urlForKey($searchRoot, 'capture'),
         ];
     }
 
