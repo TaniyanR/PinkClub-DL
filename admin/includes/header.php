@@ -40,7 +40,18 @@ $menuGroups = [
 $flash = function_exists('flash_get') ? flash_get() : null;
 $titleText = (string)($title ?? APP_NAME);
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = $faviconPath !== '' ? public_url($faviconPath) : '';
+$faviconUrl = '';
+if ($faviconPath !== '') {
+    $faviconRelativePath = ltrim($faviconPath, '/');
+    if (str_starts_with($faviconRelativePath, 'uploads/site_settings/')) {
+        $faviconRelativePath = 'public/' . $faviconRelativePath;
+    }
+    $faviconUrl = public_url($faviconRelativePath);
+    $faviconFile = __DIR__ . '/../../public/' . ltrim($faviconPath, '/');
+    if (is_file($faviconFile)) {
+        $faviconUrl .= (str_contains($faviconUrl, '?') ? '&' : '?') . 'v=' . rawurlencode((string)filemtime($faviconFile));
+    }
+}
 $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
 ?>
 <!doctype html>

@@ -48,7 +48,18 @@ $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
 $titleText = $isHomeTitle ? ($tagline !== '' ? $siteName . ' - ' . $tagline : $siteName) : $titleBaseText . ' | ' . $siteName;
 $logoUrl = $logoPath !== '' ? public_url($logoPath) : '';
-$faviconUrl = $faviconPath !== '' ? public_url($faviconPath) : '';
+$faviconUrl = '';
+if ($faviconPath !== '') {
+    $faviconRelativePath = ltrim($faviconPath, '/');
+    if (str_starts_with($faviconRelativePath, 'uploads/site_settings/')) {
+        $faviconRelativePath = 'public/' . $faviconRelativePath;
+    }
+    $faviconUrl = public_url($faviconRelativePath);
+    $faviconFile = __DIR__ . '/../' . ltrim($faviconPath, '/');
+    if (is_file($faviconFile)) {
+        $faviconUrl .= (str_contains($faviconUrl, '?') ? '&' : '?') . 'v=' . rawurlencode((string)filemtime($faviconFile));
+    }
+}
 $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
 $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
 $canRenderAd = function_exists('render_ad');

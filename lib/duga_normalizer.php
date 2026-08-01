@@ -111,6 +111,52 @@ final class DugaNormalizer
         return array_values(array_unique($images));
     }
 
+    private static function imageForKey(mixed $value, string $targetKey): ?string
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+
+        foreach ($value as $key => $child) {
+            $normalizedKey = is_string($key) ? strtolower(str_replace(['_', '-'], '', $key)) : '';
+            if ($normalizedKey === $targetKey) {
+                $url = self::firstUrl($child);
+                if ($url !== null) {
+                    return $url;
+                }
+            }
+        }
+
+        foreach ($value as $child) {
+            $url = self::imageForKey($child, $targetKey);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
+    private static function packageImage(array $row): ?string
+    {
+        foreach ([
+            'posterimage',
+            'jacketimage',
+            'packageimage',
+            'packageimagelarge',
+            'package',
+            'jacket',
+            'poster',
+        ] as $key) {
+            $url = self::imageForKey($row, $key);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
     private static function firstUrl(mixed $value): ?string
     {
         $url = self::url($value);
@@ -224,6 +270,7 @@ final class DugaNormalizer
             $movie = self::sampleMovie($row);
             $sampleImages = self::sampleImages($row['thumbnail'] ?? []);
             $primarySampleImage = $sampleImages[0] ?? null;
+            $packageImage = self::packageImage($row);
             $performers = self::namedList($row['performer'] ?? []);
             $genres = self::namedList($row['category'] ?? []);
             $series = self::namedList($row['series'] ?? []);
@@ -232,8 +279,9 @@ final class DugaNormalizer
             $maker = self::string($row['makername'] ?? null);
             $makers = $maker === null ? [] : [['id' => '', 'name' => $maker, 'ruby' => null]];
             $raw = $row;
-            // PinkClub-DLではパッケージ画像を保存・表示せず、cap画像だけを使用します。
-            unset($raw['posterimage'], $raw['jacketimage']);
+            if ($packageImage !== null) {
+                $raw['packageImage'] = ['large' => $packageImage, 'small' => $packageImage];
+            }
             $raw['content_id'] = $productId;
             $raw['product_id'] = $productId;
             $raw['maker_product'] = self::string($row['itemno'] ?? null);
@@ -279,8 +327,8 @@ final class DugaNormalizer
                 'url' => self::url($row['url'] ?? null),
                 'affiliate_url' => self::url($row['affiliateurl'] ?? null),
                 'image_list' => $primarySampleImage,
-                'image_small' => $primarySampleImage,
-                'image_large' => $primarySampleImage,
+                'image_small' => $packageImage ?? $primarySampleImage,
+                'image_large' => $packageImage ?? $primarySampleImage,
                 'sample_movie_url_476' => $movie['movie'],
                 'sample_movie_url_560' => $movie['movie'],
                 'sample_movie_url_644' => $movie['movie'],
@@ -304,4 +352,3 @@ final class DugaNormalizer
         return $normalized;
     }
 }
-

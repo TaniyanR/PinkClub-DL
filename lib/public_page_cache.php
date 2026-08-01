@@ -134,3 +134,20 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         }
     });
 }
+
+
+function pcf_public_page_cache_clear(): int
+{
+    $cacheDirectory = dirname(__DIR__) . '/storage/cache/public-pages';
+    if (!is_dir($cacheDirectory)) {
+        return 0;
+    }
+
+    $deleted = 0;
+    foreach (glob($cacheDirectory . '/*') ?: [] as $cacheFile) {
+        if (is_file($cacheFile) && @unlink($cacheFile)) {
+            $deleted++;
+        }
+    }
+    return $deleted;
+}

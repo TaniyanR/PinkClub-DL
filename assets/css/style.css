@@ -612,6 +612,7 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
 .sample-buttons{display:flex;flex-direction:column;gap:6px;width:100%;max-width:100%;overflow:visible}
 
 .sample-button{border:1px solid transparent;border-radius:4px;padding:12px 10px;width:100%;font-size:14px;font-weight:700;cursor:pointer;white-space:normal;flex:0 0 auto;box-sizing:border-box}
+a.sample-button{text-align:center;text-decoration:none;display:block}
 .sample-button--enabled{background:#1d4ed8;color:#fff}
 .sample-button--disabled{background:#9ca3af;color:#fff;cursor:not-allowed}
 

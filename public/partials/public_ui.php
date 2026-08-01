@@ -210,12 +210,13 @@ if (!function_exists('pcf_item_image')) {
     {
         $candidates = [
             (string)($item['full_package_url'] ?? ''),
+            (string)($item['package_image_url'] ?? ''),
             (string)($item['main_image_url'] ?? ''),
             (string)($item['image_url'] ?? ''),
-            (string)($item['image_large'] ?? ''),
-            (string)($item['image_small'] ?? ''),
             (string)($item['package_image_large'] ?? ''),
             (string)($item['package_image_small'] ?? ''),
+            (string)($item['image_large'] ?? ''),
+            (string)($item['image_small'] ?? ''),
         ];
 
         $rawJson = (string)($item['raw_json'] ?? '');
@@ -224,6 +225,10 @@ if (!function_exists('pcf_item_image')) {
             if (is_array($raw)) {
                 $candidates[] = (string)($raw['packageImage']['large'] ?? '');
                 $candidates[] = (string)($raw['packageImage']['small'] ?? '');
+                $candidates[] = pcf_first_image_from_mixed($raw['posterimage'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['jacketimage'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['packageimage'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['packageImage'] ?? null);
                 $candidates[] = (string)($raw['imageURL']['large'] ?? '');
                 $candidates[] = (string)($raw['imageURL']['small'] ?? '');
                 $candidates[] = pcf_first_image_from_mixed($raw['imageURL']['list'] ?? null);
@@ -325,7 +330,7 @@ if (!function_exists('pcf_pick_sample_movie_urls_from_raw')) {
     function pcf_pick_sample_movie_urls_from_raw(array $raw): array
     {
         $urls = [];
-        foreach (['sampleMovieURL', 'sample_movie_url', 'sampleMovieUrl'] as $movieKeyName) {
+        foreach (['sampleMovieURL', 'sample_movie_url', 'sampleMovieUrl', 'samplemovie', 'sampleMovie', 'sample_movie'] as $movieKeyName) {
             $rawMovie = $raw[$movieKeyName] ?? null;
 
             if (is_string($rawMovie)) {
@@ -577,7 +582,7 @@ if (!function_exists('pcf_render_item_card')) {
         $itemUrl = $itemId > 0 ? public_url('item.php?id=' . $itemId) : public_url('item.php?cid=' . rawurlencode($contentId));
         $imageUrl = trim(pcf_item_image($item));
         if ($preferFullPackageImage) {
-            foreach ([(string)($item['image_large'] ?? ''), pcf_first_image_from_mixed($item['image_list'] ?? ''), (string)($item['image_small'] ?? '')] as $imageCandidate) {
+            foreach ([pcf_item_image($item), (string)($item['image_large'] ?? ''), pcf_first_image_from_mixed($item['image_list'] ?? ''), (string)($item['image_small'] ?? '')] as $imageCandidate) {
                 $fullPackageImage = trim($imageCandidate);
                 if ($fullPackageImage !== '' && !pcf_is_self_hosted_duga_image_url($fullPackageImage)) {
                     $imageUrl = $fullPackageImage;
@@ -605,6 +610,8 @@ if (!function_exists('pcf_render_item_card')) {
             $movieUrls = pcf_pick_sample_movie_urls_from_raw($raw);
             $sampleMovieUrl = (string)($movieUrls[0] ?? '');
         }
+        $affiliateUrl = trim((string)($item['affiliate_url'] ?? $item['url'] ?? ''));
+        $sampleFallbackUrl = $affiliateUrl !== '' ? public_url('out.php') . '?' . http_build_query(['to' => $affiliateUrl]) : '';
 
         echo '<article class="pcf-dm-card">';
         echo '<a class="pcf-dm-card__image-link" href="' . e($itemUrl) . '">';
@@ -621,6 +628,8 @@ if (!function_exists('pcf_render_item_card')) {
         echo '<span style="display:block;width:100%;padding:12px 10px;text-align:center;color:#000;background:transparent;border:1px solid #000;border-radius:4px;font-size:14px;font-weight:700;box-sizing:border-box;">' . $releaseDateLabel . '</span>';
         if ($sampleMovieUrl !== '') {
             echo '<button type="button" class="pcf-dm-card__button sample-movie-trigger" data-movie-url="' . e($sampleMovieUrl) . '" data-movie-title="' . e($title) . '">サンプル動画</button>';
+        } elseif ($sampleFallbackUrl !== '') {
+            echo '<a class="pcf-dm-card__button" href="' . e($sampleFallbackUrl) . '" target="_blank" rel="noopener noreferrer">サンプル動画</a>';
         } else {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル動画</span>';
         }

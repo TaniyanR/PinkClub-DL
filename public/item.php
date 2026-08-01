@@ -46,7 +46,7 @@ function item_collect_movie_urls(mixed $value, array &$urls): void
 function item_pick_movie_urls_from_raw(array $raw): array
 {
     $urls = [];
-    foreach (['sampleMovieURL', 'sample_movie_url', 'sampleMovieUrl'] as $movieKeyName) {
+    foreach (['sampleMovieURL', 'sample_movie_url', 'sampleMovieUrl', 'samplemovie', 'sampleMovie', 'sample_movie'] as $movieKeyName) {
         $rawMovie = $raw[$movieKeyName] ?? null;
 
         if (is_string($rawMovie)) {
@@ -389,6 +389,9 @@ $sampleMoviePath = (string)(parse_url($sampleMovieUrl, PHP_URL_PATH) ?: '');
 $sampleMovieIsVideo = $sampleMovieUrl !== '' && preg_match('/\.(?:mp4|webm|ogg)$/i', $sampleMoviePath) === 1;
 $sampleMoviePoster = '';
 $rawSampleMovie = is_array($raw['samplemovie'] ?? null) ? $raw['samplemovie'] : [];
+$rawSampleMovie = $rawSampleMovie !== []
+    ? $rawSampleMovie
+    : (is_array($raw['sampleMovie'] ?? null) ? $raw['sampleMovie'] : []);
 $rawSampleMovieMedium = is_array($rawSampleMovie['midium'] ?? null)
     ? $rawSampleMovie['midium']
     : (is_array($rawSampleMovie['medium'] ?? null) ? $rawSampleMovie['medium'] : []);

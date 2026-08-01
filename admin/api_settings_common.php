@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $s = settings_get();
             $beforeCount = (int)db()->query('SELECT COUNT(*) FROM items')->fetchColumn();
-            $normalizerVersion = '4';
+            $normalizerVersion = '5';
             $needsNormalizerRefresh = site_setting_get('duga_normalizer_version', '') !== $normalizerVersion;
             $testOffset = $needsNormalizerRefresh
                 ? 1
@@ -73,6 +73,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sortIndex = 0;
             }
             $sort = $sortModes[$sortIndex % count($sortModes)];
+            $refreshedCount = 0;
+            $refreshedMovieCount = 0;
+            if ($needsNormalizerRefresh) {
+                $refreshResult = $sync->refreshExistingItems([
+                    'hits' => 100,
+                    'offset' => 1,
+                    'sort' => 'new',
+                ]);
+                $refreshedCount = (int)($refreshResult['refreshed_count'] ?? 0);
+                $refreshedMovieCount = (int)($refreshResult['movie_count'] ?? 0);
+            }
+
             $processed = 0;
             $movieCount = 0;
             $nextOffset = $testOffset;
@@ -111,7 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ' / 保存済み合計: ' . (string)$afterCount
                 . ' / 新規追加: ' . (string)$inserted
                 . ' / 更新: ' . (string)$updated
-                . ' / API動画あり: ' . (string)$movieCount
+                . ' / 保存対象の動画あり: ' . (string)$movieCount
+                . ' / 既存再確認: ' . (string)$refreshedCount
+                . '（動画あり: ' . (string)$refreshedMovieCount . '）'
                 . ' / sort: ' . $sort
                 . ' / 試行: ' . (string)$attempts
                 . ' / 次回offset: ' . (string)$nextOffset;
