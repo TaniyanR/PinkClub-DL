@@ -316,7 +316,7 @@ function pick_full_package_image(array $item): string
 {
     $raw = decode_item_raw($item);
     $rawImageCandidates = [];
-    foreach (['packageImage', 'packageimage', 'posterimage', 'jacketimage', 'package', 'poster', 'jacket'] as $rawKey) {
+    foreach (['jacketimage', 'packageimagelarge', 'packageimage', 'package', 'jacket', 'packageImage', 'poster', 'posterimage'] as $rawKey) {
         collect_image_urls_from_value($raw[$rawKey] ?? null, $rawImageCandidates);
     }
 
