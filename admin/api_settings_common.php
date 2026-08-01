@@ -59,7 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $s = settings_get();
             $beforeCount = (int)db()->query('SELECT COUNT(*) FROM items')->fetchColumn();
-            $testOffset = (int)site_setting_get('item_sync_test_offset', '1');
+            $normalizerVersion = '3';
+            $needsNormalizerRefresh = site_setting_get('duga_normalizer_version', '') !== $normalizerVersion;
+            $testOffset = $needsNormalizerRefresh
+                ? 1
+                : (int)site_setting_get('item_sync_test_offset', '1');
             if ($testOffset < 1) {
                 $testOffset = 1;
             }
@@ -96,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             site_setting_set_many([
                 'item_sync_test_offset' => (string)$nextOffset,
                 'item_sync_test_sort_index' => (string)($sortIndex + 1),
+                'duga_normalizer_version' => $normalizerVersion,
             ]);
             $inserted = max(0, $afterCount - $beforeCount);
             $updated = max(0, $processed - $inserted);
@@ -171,7 +176,7 @@ require __DIR__ . '/includes/header.php';
   <form method="post" class="stack" style="max-width:700px;" id="duga-api-settings-form">
     <?= csrf_input() ?>
     <div>
-      <label>アプリケーションID<br><input type="password" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
+      <label>アプリケーションID<br><input type="text" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
     </div>
     <div>
       <label>代理店ID<br><input type="text" name="affiliate_id" value="<?= e($affiliateId) ?>" inputmode="numeric" style="width:100%"></label>
@@ -252,7 +257,6 @@ require __DIR__ . '/includes/header.php';
     const submitter = event.submitter;
     if (!submitter || submitter.value !== 'test_save') return;
     progress.style.display = 'block';
-    submitter.disabled = true;
     submitter.textContent = '取得中…';
   });
 })();

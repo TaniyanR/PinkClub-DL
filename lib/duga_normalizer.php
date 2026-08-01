@@ -37,7 +37,16 @@ final class DugaNormalizer
 
         $rows = [];
         $seen = [];
-        foreach (self::list($value) as $entry) {
+        $queue = self::list($value);
+        while ($queue !== []) {
+            $entry = array_shift($queue);
+            if (is_array($entry) && array_key_exists($container, $entry)) {
+                foreach (self::list($entry[$container]) as $nested) {
+                    $queue[] = $nested;
+                }
+                continue;
+            }
+
             if (is_string($entry)) {
                 $id = '';
                 $name = trim($entry);
@@ -102,16 +111,52 @@ final class DugaNormalizer
         return array_values(array_unique($images));
     }
 
+    private static function firstUrl(mixed $value): ?string
+    {
+        $url = self::url($value);
+        if ($url !== null) {
+            return $url;
+        }
+        if (!is_array($value)) {
+            return null;
+        }
+        foreach ($value as $child) {
+            $url = self::firstUrl($child);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+        return null;
+    }
+
+    private static function urlForKey(mixed $value, string $targetKey): ?string
+    {
+        if (!is_array($value)) {
+            return null;
+        }
+        foreach ($value as $key => $child) {
+            if (is_string($key) && strtolower($key) === $targetKey) {
+                $url = self::firstUrl($child);
+                if ($url !== null) {
+                    return $url;
+                }
+            }
+        }
+        foreach ($value as $child) {
+            $url = self::urlForKey($child, $targetKey);
+            if ($url !== null) {
+                return $url;
+            }
+        }
+        return null;
+    }
+
     private static function sampleMovie(array $row): array
     {
-        $sample = is_array($row['samplemovie'] ?? null) ? $row['samplemovie'] : [];
-        $medium = $sample['midium'] ?? $sample['medium'] ?? $sample;
-        if (!is_array($medium)) {
-            $medium = [];
-        }
+        $sample = $row['samplemovie'] ?? [];
         return [
-            'movie' => self::url($medium['movie'] ?? null),
-            'capture' => self::url($medium['capture'] ?? null),
+            'movie' => self::urlForKey($sample, 'movie'),
+            'capture' => self::urlForKey($sample, 'capture'),
         ];
     }
 
@@ -179,6 +224,9 @@ final class DugaNormalizer
 
             $price = self::string($row['price'] ?? null);
             $review = is_array($row['review'] ?? null) ? $row['review'] : [];
+            if (array_is_list($review)) {
+                $review = is_array($review[0] ?? null) ? $review[0] : [];
+            }
 
             $normalized[] = [
                 'raw' => $raw,

@@ -197,7 +197,7 @@ return [
         'session_name' => 'pinkclub_dl_session',
     ],
     'duga' => [
-        'endpoint' => 'https://api.duga.jp/search',
+        'endpoint' => 'https://affapi.duga.jp/search',
         'banner_id' => '01',
     ],
     'pagination' => [
