@@ -100,7 +100,7 @@ function duga_client_for_type(string $apiType): DugaApiClient
 {
     $cred = api_credential_get($apiType);
     $settings = settings_get();
-    $endpoint = (string)(app_config()['duga']['endpoint'] ?? 'https://api.duga.jp/search');
+    $endpoint = (string)(app_config()['duga']['endpoint'] ?? 'https://affapi.duga.jp/search');
     return new DugaApiClient(
         (string)($cred['api_id'] ?? ''),
         (string)($cred['affiliate_id'] ?? ''),
