@@ -1,0 +1,11 @@
+ErrorDocument 404 /404.php
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^(?:index\.(?:php|com))?$ https://%{HTTP_HOST}/ [R=301,L]
+RewriteRule ^index\.(?:php|com)$ / [R=301,L]
+RewriteRule ^(config(?:\.local)?\.php|cache|logs|config|lib|sql)(/|$) - [F,L]
+RewriteRule ^public/ - [L]
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^(.*)$ public/$1 [L]
