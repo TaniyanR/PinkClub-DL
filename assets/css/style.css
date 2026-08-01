@@ -591,6 +591,27 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
   .pinkclub-fl-product-grid .rail-card .thumb,
   .pinkclub-fl-product-grid .rail-card .rail-card__noimage{height:150px !important}
 }
+@media (max-width:480px){
+  .pinkclub-fl-product-grid{
+    grid-template-columns:1fr;
+    gap:24px;
+  }
+  .pinkclub-fl-product-grid .rail-card{
+    width:100% !important;
+    max-width:none !important;
+    padding:16px !important;
+  }
+  .pinkclub-fl-product-grid .rail-card > a:first-child{
+    height:auto;
+  }
+  .pinkclub-fl-product-grid .rail-card .thumb{
+    height:auto !important;
+    aspect-ratio:auto;
+  }
+  .pinkclub-fl-product-grid .rail-card .rail-card__noimage{
+    height:210px !important;
+  }
+}
 .rail-card__title{
   width:100%;
   max-width:100%;
