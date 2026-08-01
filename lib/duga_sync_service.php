@@ -27,6 +27,40 @@ class DugaSyncService
         return $savedCount;
     }
 
+    public function refreshExistingItems(array $params = []): array
+    {
+        $hits = min(100, max(1, (int)($params['hits'] ?? 100)));
+        $offset = $this->normalizeItemListOffset((int)($params['offset'] ?? 1));
+        $response = $this->client->fetchItems(array_merge($params, ['hits' => $hits, 'offset' => $offset, 'sort' => $params['sort'] ?? 'new']));
+        $items = DugaNormalizer::normalizeItemsResponse($response);
+        $existingContentIds = $this->itemsExistByContentIds(array_map(static function (array $item): string {
+            return (string)($item['content_id'] ?? '');
+        }, $items));
+        $existingItems = array_values(array_filter($items, static function (array $item) use ($existingContentIds): bool {
+            $contentId = (string)($item['content_id'] ?? '');
+            return $contentId !== '' && isset($existingContentIds[$contentId]);
+        }));
+
+        $movieCount = 0;
+        foreach ($existingItems as $item) {
+            if (trim((string)($item['sample_movie_url_720'] ?? '')) !== '') {
+                $movieCount++;
+            }
+        }
+
+        if ($existingItems !== []) {
+            $this->saveItemsWithStats($existingItems, 'items', false);
+            if (function_exists('pcf_public_page_cache_clear')) {
+                pcf_public_page_cache_clear();
+            }
+        }
+
+        return [
+            'refreshed_count' => count($existingItems),
+            'movie_count' => $movieCount,
+        ];
+    }
+
     public function syncItemsBatch(string $siteCode, string $serviceCode, string $floorCode, int $batch, int $offset = 1, array $extraParams = [], array $excludeKeywords = []): array
     {
         $targetNew = max(1, $batch);
