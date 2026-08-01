@@ -59,7 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $s = settings_get();
             $beforeCount = (int)db()->query('SELECT COUNT(*) FROM items')->fetchColumn();
-            $testOffset = (int)site_setting_get('item_sync_test_offset', '1');
+            $normalizerVersion = '2';
+            $needsNormalizerRefresh = site_setting_get('duga_normalizer_version', '') !== $normalizerVersion;
+            $testOffset = $needsNormalizerRefresh
+                ? 1
+                : (int)site_setting_get('item_sync_test_offset', '1');
             if ($testOffset < 1) {
                 $testOffset = 1;
             }
@@ -96,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             site_setting_set_many([
                 'item_sync_test_offset' => (string)$nextOffset,
                 'item_sync_test_sort_index' => (string)($sortIndex + 1),
+                'duga_normalizer_version' => $normalizerVersion,
             ]);
             $inserted = max(0, $afterCount - $beforeCount);
             $updated = max(0, $processed - $inserted);
