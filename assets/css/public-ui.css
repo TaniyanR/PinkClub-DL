@@ -955,3 +955,20 @@
   aspect-ratio: auto;
   height: 170px !important;
 }
+
+@media (max-width: 480px) {
+  .site-main--legacy .rail-section .pinkclub-fl-product-grid .rail-card > a:first-child {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .site-main--legacy .rail-section .pinkclub-fl-product-grid .rail-card .thumb {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    object-fit: contain !important;
+    object-position: center top !important;
+  }
+}
