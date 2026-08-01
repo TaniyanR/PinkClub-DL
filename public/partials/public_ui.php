@@ -211,30 +211,35 @@ if (!function_exists('pcf_item_image')) {
         $candidates = [
             (string)($item['full_package_url'] ?? ''),
             (string)($item['package_image_url'] ?? ''),
-            (string)($item['main_image_url'] ?? ''),
-            (string)($item['image_url'] ?? ''),
             (string)($item['package_image_large'] ?? ''),
             (string)($item['package_image_small'] ?? ''),
-            (string)($item['image_large'] ?? ''),
-            (string)($item['image_small'] ?? ''),
         ];
 
         $rawJson = (string)($item['raw_json'] ?? '');
         if ($rawJson !== '') {
             $raw = pcf_maybe_decode_json_value($rawJson);
             if (is_array($raw)) {
+                $candidates[] = pcf_first_image_from_mixed($raw['jacketimage'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['packageimagelarge'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['packageimage'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['package'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['jacket'] ?? null);
+                $candidates[] = pcf_first_image_from_mixed($raw['packageImage'] ?? null);
                 $candidates[] = (string)($raw['packageImage']['large'] ?? '');
                 $candidates[] = (string)($raw['packageImage']['small'] ?? '');
+                $candidates[] = pcf_first_image_from_mixed($raw['poster'] ?? null);
                 $candidates[] = pcf_first_image_from_mixed($raw['posterimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['jacketimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['packageimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['packageImage'] ?? null);
                 $candidates[] = (string)($raw['imageURL']['large'] ?? '');
                 $candidates[] = (string)($raw['imageURL']['small'] ?? '');
                 $candidates[] = pcf_first_image_from_mixed($raw['imageURL']['list'] ?? null);
                 $candidates[] = pcf_first_image_from_mixed($raw);
             }
         }
+
+        $candidates[] = (string)($item['main_image_url'] ?? '');
+        $candidates[] = (string)($item['image_url'] ?? '');
+        $candidates[] = (string)($item['image_large'] ?? '');
+        $candidates[] = (string)($item['image_small'] ?? '');
 
         foreach ($candidates as $candidate) {
             $value = trim($candidate);
