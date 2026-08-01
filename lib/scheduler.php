@@ -135,13 +135,15 @@ function scheduler_run_items_schedule(DugaSyncService $service, array $settings)
         $pdo->prepare("UPDATE sync_job_state SET lock_until = NULL, updated_at = NOW() WHERE job_key = 'items'")->execute();
         return $skip;
     }
+    $normalizerVersion = '5';
+    $needsNormalizerRefresh = site_setting_get('duga_normalizer_version', '') !== $normalizerVersion;
     $stateStmt = $pdo->prepare("SELECT next_offset FROM sync_job_state WHERE job_key = 'items' LIMIT 1");
     $stateStmt->execute();
-    $offset = max(1, (int)$stateStmt->fetchColumn());
+    $offset = $needsNormalizerRefresh ? 1 : max(1, (int)$stateStmt->fetchColumn());
     if ($offset > 50000) {
         $offset = 1;
     }
-    if ($offset < 101) {
+    if (!$needsNormalizerRefresh && $offset < 101) {
         $offset = 101;
     }
 
@@ -162,7 +164,7 @@ function scheduler_run_items_schedule(DugaSyncService $service, array $settings)
         $message = (string)($result['message'] ?? '商品を同期しました');
         $pdo->prepare("UPDATE sync_job_state SET next_offset = :next_offset, last_run_at = NOW(), last_success = 1, last_message = :message, lock_until = NULL, updated_at = NOW() WHERE job_key = 'items'")
             ->execute([':next_offset' => $nextOffset, ':message' => $message]);
-        site_setting_set_many(['last_item_sync_at' => date('Y-m-d H:i:s'), 'item_sync_offset' => (string)$nextOffset]);
+        site_setting_set_many(['last_item_sync_at' => date('Y-m-d H:i:s'), 'item_sync_offset' => (string)$nextOffset, 'duga_normalizer_version' => $normalizerVersion]);
 
         return ['synced_count' => (int)($result['synced_count'] ?? 0), 'message' => $message];
     } catch (Throwable $e) {
