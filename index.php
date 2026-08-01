@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/public/_bootstrap.php';
 require_once __DIR__ . '/lib/repository.php';
+require_once __DIR__ . '/public/partials/public_ui.php';
 
 function redirect_canonical_home_url(): void
 {
