@@ -171,7 +171,7 @@ require __DIR__ . '/includes/header.php';
   <form method="post" class="stack" style="max-width:700px;" id="duga-api-settings-form">
     <?= csrf_input() ?>
     <div>
-      <label>アプリケーションID<br><input type="password" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
+      <label>アプリケーションID<br><input type="text" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
     </div>
     <div>
       <label>代理店ID<br><input type="text" name="affiliate_id" value="<?= e($affiliateId) ?>" inputmode="numeric" style="width:100%"></label>
