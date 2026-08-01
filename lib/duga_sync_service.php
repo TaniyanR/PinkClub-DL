@@ -20,7 +20,11 @@ class DugaSyncService
         $offset = $this->normalizeItemListOffset((int)($params['offset'] ?? 1));
         $response = $this->client->fetchItems(array_merge($params, ['hits' => $hits, 'offset' => $offset, 'sort' => $params['sort'] ?? 'new']));
         $items = DugaNormalizer::normalizeItemsResponse($response);
-        return $this->saveItems($items, 'items');
+        $savedCount = $this->saveItems($items, 'items');
+        if ($savedCount > 0 && function_exists('pcf_public_page_cache_clear')) {
+            pcf_public_page_cache_clear();
+        }
+        return $savedCount;
     }
 
     public function syncItemsBatch(string $siteCode, string $serviceCode, string $floorCode, int $batch, int $offset = 1, array $extraParams = [], array $excludeKeywords = []): array
