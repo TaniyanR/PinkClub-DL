@@ -252,7 +252,6 @@ require __DIR__ . '/includes/header.php';
     const submitter = event.submitter;
     if (!submitter || submitter.value !== 'test_save') return;
     progress.style.display = 'block';
-    submitter.disabled = true;
     submitter.textContent = '取得中…';
   });
 })();
