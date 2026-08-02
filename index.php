@@ -30,6 +30,10 @@ function redirect_canonical_home_url(): void
         if (str_starts_with($canonicalUrl, 'http://')) {
             $canonicalUrl = 'https://' . substr($canonicalUrl, 7);
         }
+        $queryString = (string)($_SERVER['QUERY_STRING'] ?? '');
+        if ($queryString !== '') {
+            $canonicalUrl .= '?' . $queryString;
+        }
         header('Location: ' . $canonicalUrl, true, 301);
         exit;
     }
@@ -255,14 +259,15 @@ function home_column_exists(PDO $pdo, string $table, string $column): bool
     }
 }
 
-function fetch_items_with_order_fallback(PDO $pdo, array $orderByCandidates, int $limit): array
+function fetch_items_with_order_fallback(PDO $pdo, array $orderByCandidates, int $limit, int $offset = 0): array
 {
     $limit = max(1, min(300, $limit));
+    $offset = max(0, $offset);
     $sourceWhere = items_product_source_where();
     $sourceWhereSql = $sourceWhere !== '' ? ' WHERE ' . $sourceWhere : '';
 
     foreach ($orderByCandidates as $orderBy) {
-        $rows = query_all_safe($pdo, 'SELECT * FROM items' . $sourceWhereSql . ' ORDER BY ' . $orderBy . ' LIMIT ' . $limit);
+        $rows = query_all_safe($pdo, 'SELECT * FROM items' . $sourceWhereSql . ' ORDER BY ' . $orderBy . ' LIMIT ' . $limit . ' OFFSET ' . $offset);
         if ($rows !== []) {
             return $rows;
         }
@@ -398,6 +403,9 @@ function safe_render_home_ad(string $positionKey): void
 
 $title = 'トップ';
 $itemCount = 0;
+$page = max(1, (int)get('page', 1));
+$per = 32;
+$pg = paginate(0, $page, $per);
 $latestItems = [];
 
 try {
@@ -407,14 +415,15 @@ try {
     $itemCount = (int)$pdo->query('SELECT COUNT(*) FROM items' . $sourceWhereSql)->fetchColumn();
 
     if ($itemCount > 0) {
+        $pg = paginate($itemCount, $page, $per);
         $latestRows = fetch_items_with_order_fallback($pdo, [
             'release_date DESC, updated_at DESC, id DESC',
             'date_published DESC, updated_at DESC, id DESC',
             'updated_at DESC, id DESC',
             'id DESC',
-        ], 40);
+        ], $per + 8, (int)$pg['offset']);
         $usedItemKeys = [];
-        $latestItems = take_unique_items_for_home($latestRows, $usedItemKeys, 32);
+        $latestItems = take_unique_items_for_home($latestRows, $usedItemKeys, $per);
     }
 } catch (Throwable $e) {
     error_log('public/index.php load failed: ' . $e->getMessage());
@@ -422,7 +431,15 @@ try {
 
 $title = 'トップ';
 $pageDescription = function_exists('setting_site_tagline') ? setting_site_tagline('') : '';
-$canonicalUrl = public_url('index.php');
+$homeUrl = public_url('');
+$canonicalUrl = $homeUrl
+    . ((int)($pg['page'] ?? 1) > 1 ? '?' . http_build_query(['page' => (int)$pg['page']]) : '');
+if ((int)($pg['page'] ?? 1) > 1) {
+    $relPrev = $homeUrl . '?' . http_build_query(['page' => (int)$pg['page'] - 1]);
+}
+if ((int)($pg['page'] ?? 1) < (int)($pg['pages'] ?? 1)) {
+    $relNext = $homeUrl . '?' . http_build_query(['page' => (int)$pg['page'] + 1]);
+}
 require __DIR__ . '/public/partials/header.php';
 ?>
 
@@ -441,6 +458,7 @@ require __DIR__ . '/public/partials/header.php';
         <?php render_item_card($item, 200, null, true, $index >= 4); ?>
       <?php endforeach; ?>
     </div>
+    <?php pcf_render_pagination($pg, $homeUrl); ?>
   </section>
 <?php endif; ?>
 
