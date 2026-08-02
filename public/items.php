@@ -333,36 +333,11 @@ function item_sample_state(array $item): array
 
 function pick_full_package_image(array $item): string
 {
-    $raw = decode_item_raw($item);
-    $rawImageCandidates = [];
-    foreach (['packageImage', 'packageimage', 'posterimage', 'jacketimage', 'package', 'poster', 'jacket'] as $rawKey) {
-        collect_index_image_urls_from_value($raw[$rawKey] ?? null, $rawImageCandidates);
+    if (function_exists('pcf_item_image')) {
+        return pcf_item_image($item);
     }
 
-    foreach ($rawImageCandidates as $image) {
-        $candidate = trim((string)$image);
-        if ($candidate !== '' && !index_is_self_hosted_duga_image_url($candidate)) {
-            return $candidate;
-        }
-    }
-
-    foreach (['image_large', 'image_list', 'image_small'] as $key) {
-        if ($key === 'image_list') {
-            foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
-                $candidate = trim((string)$image);
-                if ($candidate !== '' && !index_is_self_hosted_duga_image_url($candidate)) {
-                    return $candidate;
-                }
-            }
-            continue;
-        }
-        $candidate = trim((string)($item[$key] ?? ''));
-        if ($candidate !== '' && !index_is_self_hosted_duga_image_url($candidate)) {
-            return $candidate;
-        }
-    }
-
-    return '';
+    return trim((string)($item['image_large'] ?? $item['image_small'] ?? ''));
 }
 
 function render_item_card(array $item, int $width = 180, ?array $taxonomy = null, bool $preferFullPackageImage = false, bool $lazyLoad = true): void
@@ -389,10 +364,15 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     if ($thumbUrl !== '' && index_is_self_hosted_duga_image_url($thumbUrl)) {
         $thumbUrl = '';
     }
+    $imageFallbacks = [];
+    if (function_exists('pcf_item_image_candidates')) {
+        $imageFallbacks = array_values(array_filter(pcf_item_image_candidates($item), static fn($url): bool => trim((string)$url) !== '' && trim((string)$url) !== $thumbUrl));
+    }
+    $imageFallbackAttr = $imageFallbacks !== [] ? ' data-image-fallbacks="' . e((string)json_encode($imageFallbacks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"' : '';
     ?>
     <article class="card rail-card rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async"<?= $imageFallbackAttr ?> style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
         <div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div>
       <?php endif; ?>

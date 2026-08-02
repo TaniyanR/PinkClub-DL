@@ -205,52 +205,129 @@ if (!function_exists('pcf_first_text_by_keys_from_mixed')) {
     }
 }
 
-if (!function_exists('pcf_item_image')) {
-    function pcf_item_image(array $item): string
+if (!function_exists('pcf_duga_candidate_content_ids')) {
+    function pcf_duga_candidate_content_ids(array $item): array
     {
-        $candidates = [
-            (string)($item['full_package_url'] ?? ''),
-            (string)($item['package_image_url'] ?? ''),
-            (string)($item['main_image_url'] ?? ''),
-            (string)($item['image_url'] ?? ''),
-            (string)($item['package_image_large'] ?? ''),
-            (string)($item['package_image_small'] ?? ''),
-            (string)($item['image_large'] ?? ''),
-            (string)($item['image_small'] ?? ''),
+        $values = [
+            (string)($item['content_id'] ?? ''),
+            (string)($item['product_id'] ?? ''),
         ];
 
         $rawJson = (string)($item['raw_json'] ?? '');
         if ($rawJson !== '') {
             $raw = pcf_maybe_decode_json_value($rawJson);
             if (is_array($raw)) {
+                foreach (['content_id', 'contentid', 'product_id', 'productid', 'maker_product', 'productCode'] as $key) {
+                    $values[] = (string)($raw[$key] ?? '');
+                }
+                $values[] = pcf_first_text_by_keys_from_mixed($raw, ['content_id', 'contentid', 'product_id', 'productid', 'maker_product', 'productCode']);
+            }
+        }
+
+        foreach ([$item['affiliate_url'] ?? '', $item['url'] ?? ''] as $url) {
+            $path = parse_url((string)$url, PHP_URL_PATH);
+            if (is_string($path) && preg_match('#/ppv/([a-z0-9]+[-_][0-9]+)/#i', $path, $matches) === 1) {
+                $values[] = $matches[1];
+            }
+        }
+
+        foreach ([(string)($item['image_large'] ?? ''), (string)($item['image_small'] ?? ''), (string)($item['image_list'] ?? '')] as $value) {
+            foreach (pcf_parse_image_urls($value) as $url) {
+                $path = parse_url((string)$url, PHP_URL_PATH);
+                if (is_string($path) && preg_match('#/unsecure/([a-z0-9]+)/([0-9]+)/noauth/#i', $path, $matches) === 1) {
+                    $values[] = $matches[1] . '-' . $matches[2];
+                }
+            }
+        }
+
+        $ids = [];
+        foreach ($values as $value) {
+            $normalized = strtolower(trim((string)$value));
+            $normalized = str_replace('_', '-', $normalized);
+            if (preg_match('/^([a-z0-9]+)-([0-9]+)$/i', $normalized, $matches) !== 1) {
+                continue;
+            }
+            $ids[] = $matches[1] . '-' . $matches[2];
+        }
+
+        return array_values(array_unique($ids));
+    }
+}
+
+if (!function_exists('pcf_duga_package_image_candidates')) {
+    function pcf_duga_package_image_candidates(array $item): array
+    {
+        $candidates = [];
+        foreach (pcf_duga_candidate_content_ids($item) as $contentId) {
+            if (preg_match('/^([a-z0-9]+)-([0-9]+)$/i', $contentId, $matches) !== 1) {
+                continue;
+            }
+            $maker = strtolower($matches[1]);
+            $number = $matches[2];
+            $base = 'https://pic.duga.jp/unsecure/' . rawurlencode($maker) . '/' . rawurlencode($number) . '/noauth/';
+            foreach ([
+                'package.jpg',
+                'jacket.jpg',
+                'jacket_l.jpg',
+                'jacket_m.jpg',
+                'cover.jpg',
+                'poster.jpg',
+                'main.jpg',
+                'pac.jpg',
+                'str.jpg',
+            ] as $file) {
+                $candidates[] = $base . $file;
+            }
+        }
+
+        return array_values(array_unique($candidates));
+    }
+}
+
+if (!function_exists('pcf_item_image_candidates')) {
+    function pcf_item_image_candidates(array $item): array
+    {
+        $candidates = [
+            (string)($item['full_package_url'] ?? ''),
+            (string)($item['package_image_url'] ?? ''),
+            (string)($item['package_image_large'] ?? ''),
+            (string)($item['package_image_small'] ?? ''),
+        ];
+
+        $rawJson = (string)($item['raw_json'] ?? '');
+        if ($rawJson !== '') {
+            $raw = pcf_maybe_decode_json_value($rawJson);
+            if (is_array($raw)) {
+                foreach (['jacketimage', 'packageimagelarge', 'packageimage', 'package', 'jacket', 'packageImage', 'poster', 'posterimage'] as $rawKey) {
+                    $candidates[] = pcf_first_image_from_mixed($raw[$rawKey] ?? null);
+                }
                 $candidates[] = (string)($raw['packageImage']['large'] ?? '');
                 $candidates[] = (string)($raw['packageImage']['small'] ?? '');
-                $candidates[] = pcf_first_image_from_mixed($raw['posterimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['jacketimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['packageimage'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw['packageImage'] ?? null);
                 $candidates[] = (string)($raw['imageURL']['large'] ?? '');
                 $candidates[] = (string)($raw['imageURL']['small'] ?? '');
-                $candidates[] = pcf_first_image_from_mixed($raw['imageURL']['list'] ?? null);
-                $candidates[] = pcf_first_image_from_mixed($raw);
             }
         }
 
-        foreach ($candidates as $candidate) {
-            $value = trim($candidate);
-            if ($value !== '' && !pcf_is_self_hosted_duga_image_url($value)) {
-                return $value;
-            }
-        }
+        $packageCandidates = pcf_duga_package_image_candidates($item);
+        $sampleCandidates = [
+            (string)($item['main_image_url'] ?? ''),
+            (string)($item['image_url'] ?? ''),
+            (string)($item['image_large'] ?? ''),
+            pcf_first_image_from_mixed($item['image_list'] ?? ''),
+            (string)($item['image_small'] ?? ''),
+        ];
 
-        foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
-            $value = trim((string)$image);
-            if ($value !== '' && !pcf_is_self_hosted_duga_image_url($value)) {
-                return $value;
-            }
-        }
+        return array_values(array_unique(array_filter(array_map(static function ($candidate): string {
+            $value = trim((string)$candidate);
+            return $value !== '' && !pcf_is_self_hosted_duga_image_url($value) ? $value : '';
+        }, array_merge($candidates, $packageCandidates, $sampleCandidates)))));
+    }
+}
 
-        return '';
+if (!function_exists('pcf_item_image')) {
+    function pcf_item_image(array $item): string
+    {
+        return (string)(pcf_item_image_candidates($item)[0] ?? '');
     }
 }
 
@@ -581,8 +658,10 @@ if (!function_exists('pcf_render_item_card')) {
         $itemId = (int)($item['id'] ?? 0);
         $itemUrl = $itemId > 0 ? public_url('item.php?id=' . $itemId) : public_url('item.php?cid=' . rawurlencode($contentId));
         $imageUrl = trim(pcf_item_image($item));
+        $imageFallbacks = array_values(array_filter(pcf_item_image_candidates($item), static fn($url): bool => trim((string)$url) !== '' && trim((string)$url) !== $imageUrl));
+        $imageFallbackAttr = $imageFallbacks !== [] ? ' data-image-fallbacks="' . e((string)json_encode($imageFallbacks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"' : '';
         if ($preferFullPackageImage) {
-            foreach ([pcf_item_image($item), (string)($item['image_large'] ?? ''), pcf_first_image_from_mixed($item['image_list'] ?? ''), (string)($item['image_small'] ?? '')] as $imageCandidate) {
+            foreach (pcf_item_image_candidates($item) as $imageCandidate) {
                 $fullPackageImage = trim($imageCandidate);
                 if ($fullPackageImage !== '' && !pcf_is_self_hosted_duga_image_url($fullPackageImage)) {
                     $imageUrl = $fullPackageImage;
@@ -616,7 +695,7 @@ if (!function_exists('pcf_render_item_card')) {
         echo '<article class="pcf-dm-card">';
         echo '<a class="pcf-dm-card__image-link" href="' . e($itemUrl) . '">';
         if ($imageUrl !== '') {
-            echo '<img class="pcf-dm-card__image" src="' . e($imageUrl) . '" alt="' . e($title) . '" loading="lazy">';
+            echo '<img class="pcf-dm-card__image" src="' . e($imageUrl) . '" alt="' . e($title) . '" loading="lazy"' . $imageFallbackAttr . '>';
         } else {
             echo '<div class="pcf-dm-card__no-image">No Image</div>';
         }

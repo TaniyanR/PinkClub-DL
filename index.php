@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/public/_bootstrap.php';
 require_once __DIR__ . '/lib/repository.php';
+require_once __DIR__ . '/public/partials/public_ui.php';
 
 function redirect_canonical_home_url(): void
 {
@@ -28,6 +29,10 @@ function redirect_canonical_home_url(): void
         $canonicalUrl = rtrim(BASE_URL, '/') . '/';
         if (str_starts_with($canonicalUrl, 'http://')) {
             $canonicalUrl = 'https://' . substr($canonicalUrl, 7);
+        }
+        $queryString = (string)($_SERVER['QUERY_STRING'] ?? '');
+        if ($queryString !== '') {
+            $canonicalUrl .= '?' . $queryString;
         }
         header('Location: ' . $canonicalUrl, true, 301);
         exit;
@@ -254,14 +259,15 @@ function home_column_exists(PDO $pdo, string $table, string $column): bool
     }
 }
 
-function fetch_items_with_order_fallback(PDO $pdo, array $orderByCandidates, int $limit): array
+function fetch_items_with_order_fallback(PDO $pdo, array $orderByCandidates, int $limit, int $offset = 0): array
 {
     $limit = max(1, min(300, $limit));
+    $offset = max(0, $offset);
     $sourceWhere = items_product_source_where();
     $sourceWhereSql = $sourceWhere !== '' ? ' WHERE ' . $sourceWhere : '';
 
     foreach ($orderByCandidates as $orderBy) {
-        $rows = query_all_safe($pdo, 'SELECT * FROM items' . $sourceWhereSql . ' ORDER BY ' . $orderBy . ' LIMIT ' . $limit);
+        $rows = query_all_safe($pdo, 'SELECT * FROM items' . $sourceWhereSql . ' ORDER BY ' . $orderBy . ' LIMIT ' . $limit . ' OFFSET ' . $offset);
         if ($rows !== []) {
             return $rows;
         }
@@ -314,36 +320,11 @@ function item_sample_state(array $item): array
 
 function pick_full_package_image(array $item): string
 {
-    $raw = decode_item_raw($item);
-    $rawImageCandidates = [];
-    foreach (['packageImage', 'packageimage', 'posterimage', 'jacketimage', 'package', 'poster', 'jacket'] as $rawKey) {
-        collect_image_urls_from_value($raw[$rawKey] ?? null, $rawImageCandidates);
+    if (function_exists('pcf_item_image')) {
+        return pcf_item_image($item);
     }
 
-    foreach ($rawImageCandidates as $image) {
-        $candidate = trim((string)$image);
-        if ($candidate !== '') {
-            return $candidate;
-        }
-    }
-
-    foreach (['image_large', 'image_list', 'image_small'] as $key) {
-        if ($key === 'image_list') {
-            foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
-                $candidate = trim((string)$image);
-                if ($candidate !== '') {
-                    return $candidate;
-                }
-            }
-            continue;
-        }
-        $candidate = trim((string)($item[$key] ?? ''));
-        if ($candidate !== '') {
-            return $candidate;
-        }
-    }
-
-    return '';
+    return trim((string)($item['image_large'] ?? $item['image_small'] ?? ''));
 }
 
 function render_item_card(array $item, int $width = 180, ?array $taxonomy = null, bool $preferFullPackageImage = false, bool $lazyLoad = true): void
@@ -364,10 +345,15 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     if ($thumbUrl === '') {
         $thumbUrl = trim((string)($item['image_large'] ?? ''));
     }
+    $imageFallbacks = [];
+    if (function_exists('pcf_item_image_candidates')) {
+        $imageFallbacks = array_values(array_filter(pcf_item_image_candidates($item), static fn($url): bool => trim((string)$url) !== '' && trim((string)$url) !== $thumbUrl));
+    }
+    $imageFallbackAttr = $imageFallbacks !== [] ? ' data-image-fallbacks="' . e((string)json_encode($imageFallbacks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"' : '';
     ?>
     <article class="card rail-card rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async"<?= $imageFallbackAttr ?> style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
         <div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div>
       <?php endif; ?>
@@ -417,6 +403,9 @@ function safe_render_home_ad(string $positionKey): void
 
 $title = 'トップ';
 $itemCount = 0;
+$page = max(1, (int)get('page', 1));
+$per = 32;
+$pg = paginate(0, $page, $per);
 $latestItems = [];
 
 try {
@@ -426,14 +415,15 @@ try {
     $itemCount = (int)$pdo->query('SELECT COUNT(*) FROM items' . $sourceWhereSql)->fetchColumn();
 
     if ($itemCount > 0) {
+        $pg = paginate($itemCount, $page, $per);
         $latestRows = fetch_items_with_order_fallback($pdo, [
             'release_date DESC, updated_at DESC, id DESC',
             'date_published DESC, updated_at DESC, id DESC',
             'updated_at DESC, id DESC',
             'id DESC',
-        ], 40);
+        ], $per + 8, (int)$pg['offset']);
         $usedItemKeys = [];
-        $latestItems = take_unique_items_for_home($latestRows, $usedItemKeys, 32);
+        $latestItems = take_unique_items_for_home($latestRows, $usedItemKeys, $per);
     }
 } catch (Throwable $e) {
     error_log('public/index.php load failed: ' . $e->getMessage());
@@ -441,7 +431,15 @@ try {
 
 $title = 'トップ';
 $pageDescription = function_exists('setting_site_tagline') ? setting_site_tagline('') : '';
-$canonicalUrl = public_url('index.php');
+$homeUrl = public_url('');
+$canonicalUrl = $homeUrl
+    . ((int)($pg['page'] ?? 1) > 1 ? '?' . http_build_query(['page' => (int)$pg['page']]) : '');
+if ((int)($pg['page'] ?? 1) > 1) {
+    $relPrev = $homeUrl . '?' . http_build_query(['page' => (int)$pg['page'] - 1]);
+}
+if ((int)($pg['page'] ?? 1) < (int)($pg['pages'] ?? 1)) {
+    $relNext = $homeUrl . '?' . http_build_query(['page' => (int)$pg['page'] + 1]);
+}
 require __DIR__ . '/public/partials/header.php';
 ?>
 
@@ -460,6 +458,7 @@ require __DIR__ . '/public/partials/header.php';
         <?php render_item_card($item, 200, null, true, $index >= 4); ?>
       <?php endforeach; ?>
     </div>
+    <?php pcf_render_pagination($pg, $homeUrl); ?>
   </section>
 <?php endif; ?>
 
