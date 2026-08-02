@@ -287,6 +287,7 @@ if (!function_exists('pcf_duga_package_image_candidates')) {
 if (!function_exists('pcf_item_image_candidates')) {
     function pcf_item_image_candidates(array $item): array
     {
+        $packageCandidates = pcf_duga_package_image_candidates($item);
         $candidates = [
             (string)($item['full_package_url'] ?? ''),
             (string)($item['package_image_url'] ?? ''),
@@ -308,7 +309,6 @@ if (!function_exists('pcf_item_image_candidates')) {
             }
         }
 
-        $packageCandidates = pcf_duga_package_image_candidates($item);
         $sampleCandidates = [
             (string)($item['main_image_url'] ?? ''),
             (string)($item['image_url'] ?? ''),
@@ -320,7 +320,7 @@ if (!function_exists('pcf_item_image_candidates')) {
         return array_values(array_unique(array_filter(array_map(static function ($candidate): string {
             $value = trim((string)$candidate);
             return $value !== '' && !pcf_is_self_hosted_duga_image_url($value) ? $value : '';
-        }, array_merge($candidates, $packageCandidates, $sampleCandidates)))));
+        }, array_merge($packageCandidates, $candidates, $sampleCandidates)))));
     }
 }
 
