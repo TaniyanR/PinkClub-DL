@@ -317,7 +317,8 @@ class DugaSyncService
         }
         unset($item);
 
-        while ($pending !== []) {
+        $probeDeadline = microtime(true) + 10.0;
+        while ($pending !== [] && microtime(true) < $probeDeadline) {
             $roundUrls = [];
             foreach ($pending as $candidates) {
                 if (isset($candidates[0])) {
@@ -407,8 +408,8 @@ class DugaSyncService
             curl_setopt_array($handle, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_NOBODY => true,
-                CURLOPT_CONNECTTIMEOUT => 3,
-                CURLOPT_TIMEOUT => 5,
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_TIMEOUT => 3,
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_MAXREDIRS => 3,
                 CURLOPT_HTTPHEADER => ['Accept: image/*'],
