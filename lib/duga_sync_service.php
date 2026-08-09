@@ -219,6 +219,7 @@ class DugaSyncService
         $count = 0;
         $newCount = 0;
         $updatedCount = 0;
+        $items = $this->resolveLargePackageImages($items);
         $this->pdo->beginTransaction();
         try {
             foreach ($items as $item) {
@@ -283,6 +284,162 @@ class DugaSyncService
             $exists[(string)$contentId] = true;
         }
         return $exists;
+    }
+
+    /**
+     * DUGA APIのjacket_120.jpgは一覧用の小画像です。
+     * 同じ商品ディレクトリにあるパッケージ画像を確認し、存在する場合だけ
+     * image_largeを差し替えます。確認できない場合はAPIの画像を維持します。
+     */
+    private function resolveLargePackageImages(array $items): array
+    {
+        $contentIds = array_map(static fn (array $item): string => (string)($item['content_id'] ?? ''), $items);
+        $storedImages = $this->existingLargeImagesByContentIds($contentIds);
+        $pending = [];
+
+        foreach ($items as $index => &$item) {
+            $contentId = trim((string)($item['content_id'] ?? ''));
+            $currentImage = trim((string)($item['image_large'] ?? ''));
+            $storedImage = trim((string)($storedImages[$contentId] ?? ''));
+
+            if ($storedImage !== '' && !$this->isDugaThumbnailImage($storedImage)) {
+                $item['image_large'] = $storedImage;
+                continue;
+            }
+            if (!$this->isDugaThumbnailImage($currentImage)) {
+                continue;
+            }
+
+            $candidates = $this->dugaPackageImageCandidates($currentImage);
+            if ($candidates !== []) {
+                $pending[$index] = $candidates;
+            }
+        }
+        unset($item);
+
+        while ($pending !== []) {
+            $roundUrls = [];
+            foreach ($pending as $candidates) {
+                if (isset($candidates[0])) {
+                    $roundUrls[] = $candidates[0];
+                }
+            }
+            $available = $this->availableRemoteImages(array_values(array_unique($roundUrls)));
+
+            foreach (array_keys($pending) as $index) {
+                $candidate = array_shift($pending[$index]);
+                if (is_string($candidate) && isset($available[$candidate])) {
+                    $items[$index]['image_large'] = $candidate;
+                    unset($pending[$index]);
+                    continue;
+                }
+                if ($pending[$index] === []) {
+                    unset($pending[$index]);
+                }
+            }
+        }
+
+        return $items;
+    }
+
+    /** @return array<string, string> */
+    private function existingLargeImagesByContentIds(array $contentIds): array
+    {
+        $contentIds = array_values(array_unique(array_filter(array_map('strval', $contentIds), static fn (string $id): bool => $id !== '')));
+        if ($contentIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($contentIds), '?'));
+        $stmt = $this->pdo->prepare("SELECT content_id, image_large FROM items WHERE content_id IN ({$placeholders})");
+        $stmt->execute($contentIds);
+
+        $images = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $images[(string)$row['content_id']] = (string)($row['image_large'] ?? '');
+        }
+        return $images;
+    }
+
+    private function isDugaThumbnailImage(string $url): bool
+    {
+        $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?? ''));
+        return preg_match('#/(?:jacket_120|120x90)\.(?:jpe?g|webp)$#', $path) === 1;
+    }
+
+    /** @return string[] */
+    private function dugaPackageImageCandidates(string $thumbnailUrl): array
+    {
+        $path = (string)(parse_url($thumbnailUrl, PHP_URL_PATH) ?? '');
+        if (preg_match('#^/unsecure/([a-z0-9]+)/([0-9]+)/noauth/(?:jacket_120|120x90)\.(?:jpe?g|webp)$#i', $path, $matches) !== 1) {
+            return [];
+        }
+
+        $base = 'https://pic.duga.jp/unsecure/' . rawurlencode(strtolower($matches[1])) . '/' . rawurlencode($matches[2]) . '/noauth/';
+        $files = [
+            'package.jpg',
+            'jacket.jpg',
+            'jacket_l.jpg',
+            'jacket_m.jpg',
+            'cover.jpg',
+            'poster.jpg',
+            'main.jpg',
+            'pac.jpg',
+            'str.jpg',
+        ];
+        return array_map(static fn (string $file): string => $base . $file, $files);
+    }
+
+    /** @return array<string, bool> */
+    private function availableRemoteImages(array $urls): array
+    {
+        if ($urls === [] || !function_exists('curl_multi_init')) {
+            return [];
+        }
+
+        $multiHandle = curl_multi_init();
+        $handles = [];
+        foreach ($urls as $url) {
+            $handle = curl_init((string)$url);
+            if ($handle === false) {
+                continue;
+            }
+            curl_setopt_array($handle, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_NOBODY => true,
+                CURLOPT_CONNECTTIMEOUT => 3,
+                CURLOPT_TIMEOUT => 5,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_HTTPHEADER => ['Accept: image/*'],
+            ]);
+            curl_multi_add_handle($multiHandle, $handle);
+            $handles[(string)$url] = $handle;
+        }
+
+        do {
+            $status = curl_multi_exec($multiHandle, $running);
+            if ($running > 0) {
+                $selected = curl_multi_select($multiHandle, 1.0);
+                if ($selected === -1) {
+                    usleep(10000);
+                }
+            }
+        } while ($running > 0 && $status === CURLM_OK);
+
+        $available = [];
+        foreach ($handles as $url => $handle) {
+            $httpCode = (int)curl_getinfo($handle, CURLINFO_HTTP_CODE);
+            $contentType = strtolower((string)curl_getinfo($handle, CURLINFO_CONTENT_TYPE));
+            if ($httpCode >= 200 && $httpCode < 300 && str_starts_with($contentType, 'image/')) {
+                $available[$url] = true;
+            }
+            curl_multi_remove_handle($multiHandle, $handle);
+            curl_close($handle);
+        }
+        curl_multi_close($multiHandle);
+
+        return $available;
     }
 
     private function upsertSimple(string $table, string $codeColumn, string $code, string $name): void
@@ -400,4 +557,3 @@ class DugaSyncService
 
     }
 }
-
