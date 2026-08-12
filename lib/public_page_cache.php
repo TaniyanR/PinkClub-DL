@@ -79,11 +79,14 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     }
     $cacheKey = hash('sha256', 'v7|' . $host . '|' . $variant . '|' . $normalizedRequestUri);
     $cacheFile = $cacheDirectory . '/' . $cacheKey . '.html';
+    // Sixteen lock shards prevent a cache stampede without creating one lock file per URL.
+    $cacheLockFile = $cacheDirectory . '/.regenerate-' . substr($cacheKey, 0, 1) . '.lock';
 
     if (is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $ttlSeconds) {
         $content = @file_get_contents($cacheFile);
         if (is_string($content) && $content !== '') {
             header('X-PCF-Page-Cache: HIT');
+            header('Cache-Control: public, max-age=60, stale-while-revalidate=300');
             if ($method !== 'HEAD') {
                 echo $content;
             }
@@ -91,16 +94,60 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         }
     }
 
+    $lockHandle = @fopen($cacheLockFile, 'c');
+    if (is_resource($lockHandle)) {
+        if (!@flock($lockHandle, LOCK_EX | LOCK_NB)) {
+            if (is_file($cacheFile)) {
+                $staleContent = @file_get_contents($cacheFile);
+                if (is_string($staleContent) && $staleContent !== '') {
+                    header('X-PCF-Page-Cache: STALE');
+                    header('Cache-Control: public, max-age=30, stale-while-revalidate=300');
+                    if ($method !== 'HEAD') {
+                        echo $staleContent;
+                    }
+                    fclose($lockHandle);
+                    exit;
+                }
+            }
+            if (!@flock($lockHandle, LOCK_EX)) {
+                fclose($lockHandle);
+                $lockHandle = false;
+            }
+        }
+
+        if (is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $ttlSeconds) {
+            $content = @file_get_contents($cacheFile);
+            if (is_string($content) && $content !== '') {
+                header('X-PCF-Page-Cache: HIT-AFTER-WAIT');
+                header('Cache-Control: public, max-age=60, stale-while-revalidate=300');
+                @flock($lockHandle, LOCK_UN);
+                fclose($lockHandle);
+                if ($method !== 'HEAD') {
+                    echo $content;
+                }
+                exit;
+            }
+        }
+    }
+
     header('X-PCF-Page-Cache: MISS');
     ob_start();
 
-    register_shutdown_function(static function () use ($cacheFile, $cacheDirectory, $method, $scriptName): void {
+    register_shutdown_function(static function () use ($cacheFile, $cacheDirectory, $method, $scriptName, $lockHandle): void {
         if (ob_get_level() < 1) {
+            if (is_resource($lockHandle)) {
+                @flock($lockHandle, LOCK_UN);
+                fclose($lockHandle);
+            }
             return;
         }
 
         $content = ob_get_clean();
         if (!is_string($content)) {
+            if (is_resource($lockHandle)) {
+                @flock($lockHandle, LOCK_UN);
+                fclose($lockHandle);
+            }
             return;
         }
 
@@ -131,6 +178,10 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
 
         if ($method !== 'HEAD') {
             echo $content;
+        }
+        if (is_resource($lockHandle)) {
+            @flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
         }
     });
 }
