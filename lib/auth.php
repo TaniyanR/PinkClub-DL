@@ -20,6 +20,9 @@ function auth_last_error(): ?string
 
 function auth_attempt(string $username, string $password): bool
 {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    }
     auth_set_last_error(null);
 
     try {
@@ -49,6 +52,9 @@ function auth_attempt(string $username, string $password): bool
 
 function auth_require_admin(): void
 {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    }
     if (!auth_user()) {
         app_redirect(LOGIN_PATH);
     }
@@ -65,6 +71,9 @@ function auth_require_admin(): void
 
 function auth_logout(): void
 {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    }
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
