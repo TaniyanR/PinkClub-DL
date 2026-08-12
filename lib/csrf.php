@@ -32,6 +32,9 @@ function csrf_set_cookie(string $token): void
 
 function csrf_token(): string
 {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    }
     if (empty($_SESSION['_csrf'])) {
         $cookieToken = $_COOKIE[csrf_cookie_name()] ?? '';
         $_SESSION['_csrf'] = is_string($cookieToken) && preg_match('/\A[a-f0-9]{64}\z/', $cookieToken) === 1
@@ -49,6 +52,9 @@ function csrf_input(): string
 
 function csrf_verify(?string $token): bool
 {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    }
     if (!is_string($token) || $token === '') {
         return false;
     }

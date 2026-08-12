@@ -34,7 +34,6 @@ final class DugaApiClient
 
         $cached = $this->fetchCachedResponse($requestHash);
         if ($cached !== null) {
-            $this->insertApiLog('DUGA ItemList', $safeUrl, $requestHash, 200, json_encode($cached, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}', true);
             return $cached;
         }
 
@@ -171,7 +170,9 @@ final class DugaApiClient
             return;
         }
 
-        $body = mb_substr($responseBody, 0, 65535);
+        $isSuccess = $status >= 200 && $status < 400;
+        $bodyLimit = $isSuccess ? 65535 : 4096;
+        $body = mb_substr($responseBody, 0, $bodyLimit);
         try {
             $stmt = db()->prepare('INSERT INTO api_logs (api_name, endpoint, request_params, request_url, request_hash, response_status, status_code, response_body, cache_hit, is_success, message, created_at) VALUES (:api_name, :endpoint, :request_params, :request_url, :request_hash, :response_status, :status_code, :response_body, :cache_hit, :is_success, :message, NOW())');
             $stmt->execute([
@@ -184,8 +185,8 @@ final class DugaApiClient
                 ':status_code' => $status,
                 ':response_body' => $body,
                 ':cache_hit' => $cacheHit ? 1 : 0,
-                ':is_success' => ($status >= 200 && $status < 400) ? 1 : 0,
-                ':message' => $cacheHit ? 'cache' : (($status >= 200 && $status < 400) ? 'ok' : 'error'),
+                ':is_success' => $isSuccess ? 1 : 0,
+                ':message' => $cacheHit ? 'cache' : ($isSuccess ? 'ok' : 'error'),
             ]);
             return;
         } catch (Throwable $e) {

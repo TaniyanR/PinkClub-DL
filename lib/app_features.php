@@ -8,7 +8,9 @@ require_once __DIR__ . '/site_settings.php';
 
 function app_session_start(): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
+    if (function_exists('pcf_session_start')) {
+        pcf_session_start();
+    } elseif (session_status() !== PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli') {
         session_start();
     }
 }

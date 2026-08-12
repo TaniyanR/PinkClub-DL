@@ -31,6 +31,7 @@ function contact_spam_log(string $reason): void
 
 function contact_form_issue_id(): string
 {
+    pcf_session_start();
     $now = time();
     $forms = $_SESSION['contact_forms'] ?? [];
     $forms = is_array($forms) ? $forms : [];
@@ -54,6 +55,7 @@ function contact_form_issue_id(): string
 
 function contact_form_consume_age(string $id): ?int
 {
+    pcf_session_start();
     $forms = $_SESSION['contact_forms'] ?? [];
     if (!is_array($forms) || $id === '' || !isset($forms[$id])) {
         return null;
