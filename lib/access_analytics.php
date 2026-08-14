@@ -11,6 +11,41 @@ function analytics_beacon_marker_hash(): string
     return hash('sha256', 'pinkclub-browser-beacon');
 }
 
+
+function analytics_request_is_automated(?string $userAgent = null): bool
+{
+    $userAgent ??= (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($userAgent === '') {
+        return true;
+    }
+    if (function_exists('pcf_crawler_guard_is_known_crawler') && pcf_crawler_guard_is_known_crawler($userAgent)) {
+        return true;
+    }
+
+    foreach (['HTTP_PURPOSE', 'HTTP_SEC_PURPOSE', 'HTTP_X_MOZ'] as $header) {
+        $value = strtolower((string)($_SERVER[$header] ?? ''));
+        if ($value !== '' && preg_match('/\b(prefetch|prerender|preview)\b/', $value) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function analytics_normalize_host(string $host): string
+{
+    $host = strtolower(trim($host));
+    if ($host === '') {
+        return '';
+    }
+    if (str_contains($host, '://')) {
+        $host = (string)(parse_url($host, PHP_URL_HOST) ?: '');
+    }
+    $host = (string)preg_replace('/:\d+$/', '', $host);
+    $host = rtrim($host, '.');
+    return (string)preg_replace('/^www\./', '', $host);
+}
+
 function analytics_visitor_hash(string $ua): string
 {
     $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
@@ -89,7 +124,7 @@ function analytics_track_beacon(): void
 
     try {
     $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-    if (pcf_crawler_guard_is_known_crawler($ua)) {
+    if (analytics_request_is_automated($ua)) {
         return;
     }
     $hash = analytics_visitor_hash($ua);
@@ -124,8 +159,10 @@ function analytics_track_beacon(): void
     ]);
     $pdo->prepare('INSERT INTO daily_stats(stat_date,pv,uu,in_count,out_count,updated_at) VALUES(:d,1,:uu,0,0,NOW()) ON DUPLICATE KEY UPDATE pv = pv + 1, uu = uu + VALUES(uu), updated_at = NOW()')->execute([':d' => $today, ':uu' => $isUniqueVisitor ? 1 : 0]);
 
-    $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
-    if ($refCode !== '' || ($refererHost !== '' && !str_contains(strtolower($refererHost), $host))) {
+    $host = analytics_normalize_host((string)($_SERVER['HTTP_HOST'] ?? ''));
+    $externalReferrer = $host !== '' && $refererHost !== ''
+        && analytics_normalize_host((string)$refererHost) !== $host;
+    if ($refCode !== '' || $externalReferrer) {
         $pdo->prepare('INSERT INTO in_logs(created_at,ref_code,referer_host,path) VALUES(NOW(),:ref,:host,:path)')->execute([
             ':ref' => $refCode,
             ':host' => mb_substr((string)$refererHost, 0, 255),
@@ -140,12 +177,41 @@ function analytics_track_beacon(): void
 
 function analytics_log_out(string $targetUrl, string $refCode, string $path): void
 {
-    if (!analytics_ensure_tables()) {
+    if (!analytics_ensure_tables() || analytics_request_is_automated()) {
         return;
     }
     try {
     $today = date('Y-m-d');
     $pdo = db();
+    $visitorHash = analytics_visitor_hash((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $targetHash = hash('sha256', $targetUrl);
+
+    // Count one outbound visit per visitor and destination per day. This keeps
+    // reloads, link prefetchers and repeated taps from inflating the dashboard.
+    $duplicateStmt = $pdo->prepare(
+        "SELECT 1 FROM site_events
+         WHERE event_type = 'out'
+           AND session_id_hash = :visitor
+           AND path = :target
+           AND created_at >= CURDATE()
+           AND created_at < CURDATE() + INTERVAL 1 DAY
+         LIMIT 1"
+    );
+    $duplicateStmt->execute([':visitor' => $visitorHash, ':target' => $targetHash]);
+    if ($duplicateStmt->fetchColumn() !== false) {
+        return;
+    }
+    $pdo->prepare(
+        "INSERT INTO site_events(event_type,path,referrer,ua_hash,ip_hash,session_id_hash,created_at)
+         VALUES('out',:target,:url,:ua,:ip,:visitor,NOW())"
+    )->execute([
+        ':target' => $targetHash,
+        ':url' => mb_substr($targetUrl, 0, 500),
+        ':ua' => (($ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '')) !== '') ? hash('sha256', $ua) : null,
+        ':ip' => $visitorHash,
+        ':visitor' => $visitorHash,
+    ]);
+
     $pdo->prepare('INSERT INTO out_logs(created_at,ref_code,target_url,path) VALUES(NOW(),:ref,:url,:path)')->execute([
         ':ref' => mb_substr($refCode, 0, 64),
         ':url' => mb_substr($targetUrl, 0, 1000),
@@ -158,7 +224,6 @@ function analytics_log_out(string $targetUrl, string $refCode, string $path): vo
         $itemStmt->execute([':url' => $targetUrl]);
         $itemId = (int)($itemStmt->fetchColumn() ?: 0);
         if ($itemId > 0) {
-            $visitorHash = analytics_visitor_hash((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
             $clickStmt = $pdo->prepare(
                 'INSERT IGNORE INTO item_out_click_daily(item_id, click_date, visitor_hash, clicked_at)
                  VALUES(:item_id, :click_date, :visitor_hash, NOW())'

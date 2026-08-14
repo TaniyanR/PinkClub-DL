@@ -7,8 +7,26 @@ analytics_ensure_tables();
 
 $publicCacheDirectory = dirname(__DIR__) . '/storage/cache/public-pages';
 $publicCacheWritable = is_dir($publicCacheDirectory) && is_writable($publicCacheDirectory);
-$publicCacheFiles = is_dir($publicCacheDirectory) ? glob($publicCacheDirectory . '/*.html') : [];
-$publicCacheFileCount = is_array($publicCacheFiles) ? count($publicCacheFiles) : 0;
+$publicCacheFileCount = 0;
+$publicCacheFileCountLimited = false;
+$publicCacheCountLimit = 2000;
+if (is_dir($publicCacheDirectory)) {
+    try {
+        foreach (new FilesystemIterator($publicCacheDirectory, FilesystemIterator::SKIP_DOTS) as $cacheFile) {
+            if (!$cacheFile->isFile() || strtolower($cacheFile->getExtension()) !== 'html') {
+                continue;
+            }
+            $publicCacheFileCount++;
+            if ($publicCacheFileCount >= $publicCacheCountLimit) {
+                $publicCacheFileCountLimited = true;
+                break;
+            }
+        }
+    } catch (Throwable $e) {
+        $publicCacheWritable = false;
+    }
+}
+$publicCacheFileCountLabel = number_format($publicCacheFileCount) . ($publicCacheFileCountLimited ? '件以上' : '件');
 $publicCacheStatusLabel = $publicCacheWritable ? ($publicCacheFileCount > 0 ? '正常に動作中' : '準備完了（キャッシュ未作成）') : '要確認（保存先へ書き込めません）';
 $logRetentionDays = (int)(setting_get('analytics.cleanup.retention_days', '730') ?? '730');
 $lastLogCleanupAt = trim((string)(setting_get('analytics.cleanup.last_success_at', '') ?? ''));
@@ -138,7 +156,7 @@ require __DIR__ . '/includes/header.php';
     <article class="admin-card admin-status-card">
       <strong>公開ページキャッシュ</strong>
       <p><?= e($publicCacheStatusLabel) ?></p>
-      <small>保存済みページ: <?= e((string)$publicCacheFileCount) ?>件</small>
+      <small>保存済みページ: <?= e($publicCacheFileCountLabel) ?>（負荷防止のため最大<?= e(number_format($publicCacheCountLimit)) ?>件まで確認）</small>
     </article>
     <article class="admin-card admin-status-card">
       <strong>アクセス生ログ保存期間</strong>
@@ -152,7 +170,7 @@ require __DIR__ . '/includes/header.php';
     <article class="admin-card admin-status-card"><strong>ページビュー</strong><p><?= e((string)$sum['pv']) ?></p></article>
     <article class="admin-card admin-status-card"><strong>推定ユニークユーザー</strong><p><?= e((string)$sum['uu']) ?></p><small>選択期間内のIPハッシュ重複を除外</small></article>
     <article class="admin-card admin-status-card"><strong>流入数</strong><p><?= e((string)$sum['in_count']) ?></p></article>
-    <article class="admin-card admin-status-card"><strong>流出数</strong><p><?= e((string)$sum['out_count']) ?></p></article>
+    <article class="admin-card admin-status-card"><strong>流出数</strong><p><?= e((string)$sum['out_count']) ?></p><small>同一IP・同一遷移先の日次重複を除外（改善適用後の記録）</small></article>
   </div>
   <p>前期間比較: ページビュー <?= e((string)($sum['pv'] - (int)$prev['pv'])) ?> / ユニークユーザー <?= e((string)($sum['uu'] - (int)$prev['uu'])) ?> / 流入数 <?= e((string)($sum['in_count'] - (int)$prev['in_count'])) ?> / 流出数 <?= e((string)($sum['out_count'] - (int)$prev['out_count'])) ?></p>
   <?php elseif ($tab === 'referrer'): ?>
