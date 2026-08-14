@@ -107,7 +107,15 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 </script>
 <script>
 (function () {
-  if (!navigator.sendBeacon) return;
+  var send = function (url, data) {
+    if (navigator.sendBeacon && navigator.sendBeacon(url, data)) return true;
+    if (window.fetch) {
+      window.fetch(url, { method: 'POST', body: data, credentials: 'same-origin', keepalive: true }).catch(function () {});
+      return true;
+    }
+    return false;
+  };
+  window.__pcfSendBeacon = send;
   if (window.__pcfAnalyticsSent === true) return;
   window.__pcfAnalyticsSent = true;
   var data = new FormData();
@@ -119,21 +127,21 @@ $copyrightYears = $copyrightStartYear >= $currentYear
   } catch (e) {
     data.append('ref', '');
   }
-  navigator.sendBeacon('<?= e(public_url('analytics.php')) ?>', data);
+  send('<?= e(public_url('analytics.php')) ?>', data);
 }());
 </script>
 <?php $rankingRefreshQueue = function_exists('pcf_public_ranking_refresh_queue') ? pcf_public_ranking_refresh_queue() : []; ?>
 <?php if ($rankingRefreshQueue !== []): ?>
 <script>
 (function () {
-  if (!navigator.sendBeacon) return;
+  if (typeof window.__pcfSendBeacon !== 'function') return;
   var endpoint = <?= json_encode(public_url('ranking_refresh.php'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   var queue = <?= json_encode($rankingRefreshQueue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   queue.forEach(function (entry) {
     var data = new FormData();
     data.append('type', entry.type || '');
     data.append('period', entry.period || '');
-    navigator.sendBeacon(endpoint, data);
+    window.__pcfSendBeacon(endpoint, data);
   });
 }());
 </script>

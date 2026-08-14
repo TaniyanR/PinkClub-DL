@@ -25,6 +25,7 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         'forgot_password.php',
         'reset_password.php',
         'setup_check.php',
+        'search.php',
         'ranking_refresh.php',
         'link_apply.php',
         'page.php',
@@ -64,12 +65,34 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     $variant = $isMobile ? 'sp' : 'pc';
     $cacheQuery = [];
     parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?? ''), $cacheQuery);
+    $allowedCacheQueryKeys = [
+        'all', 'cid', 'content_id', 'fragment', 'group', 'id', 'ids', 'index',
+        'limit', 'name', 'order', 'page', 'part', 'q', 'rank_period', 'slug', 'type',
+    ];
+    $numericCacheQueryLimits = ['id' => 2000000000, 'index' => 10000, 'limit' => 200, 'page' => 1000, 'part' => 1000];
+    $highCardinalityQueryKeys = ['fragment', 'ids', 'q'];
+    $skipCacheForQuery = false;
     foreach (array_keys($cacheQuery) as $queryKey) {
-        if (str_starts_with(strtolower((string)$queryKey), 'utm_')
-            || in_array(strtolower((string)$queryKey), ['gclid', 'fbclid', 'yclid', 'ref'], true)
-        ) {
+        $normalizedKey = strtolower((string)$queryKey);
+        $value = $cacheQuery[$queryKey] ?? null;
+        if (!in_array($normalizedKey, $allowedCacheQueryKeys, true)) {
             unset($cacheQuery[$queryKey]);
+            continue;
         }
+        if (is_array($value) || strlen((string)$value) > 160
+            || (in_array($normalizedKey, $highCardinalityQueryKeys, true) && trim((string)$value) !== '')
+            || (isset($numericCacheQueryLimits[$normalizedKey])
+                && (preg_match('/^\d{1,9}$/', (string)$value) !== 1
+                    || (int)$value > $numericCacheQueryLimits[$normalizedKey]))
+        ) {
+            $skipCacheForQuery = true;
+            break;
+        }
+    }
+    if ($skipCacheForQuery) {
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Pragma: no-cache');
+        return;
     }
     ksort($cacheQuery);
     $normalizedRequestUri = $requestPath;
@@ -159,7 +182,7 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         if ($status === 200 && $content !== '') {
             if ($scriptName === 'item.php' && str_contains($content, '</body>')) {
                 $beaconUrl = function_exists('public_url') ? public_url('page_view_beacon.php') : 'page_view_beacon.php';
-                $beaconScript = '<script>(()=>{try{const p=new URLSearchParams(location.search);const b=new URLSearchParams();for(const k of ["id","content_id","cid"]){const v=p.get(k);if(v)b.set(k,v);}if([...b].length){navigator.sendBeacon(' . json_encode($beaconUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ',b);}}catch(e){}})();</script>';
+                $beaconScript = '<script>(()=>{try{const p=new URLSearchParams(location.search);const b=new URLSearchParams();for(const k of ["id","content_id","cid"]){const v=p.get(k);if(v)b.set(k,v);}if([...b].length){const u=' . json_encode($beaconUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ';if(!(navigator.sendBeacon&&navigator.sendBeacon(u,b))&&window.fetch){fetch(u,{method:"POST",body:b,credentials:"same-origin",keepalive:true}).catch(()=>{});}}}catch(e){}})();</script>';
                 $content = str_replace('</body>', $beaconScript . '</body>', $content);
             }
 
@@ -195,10 +218,14 @@ function pcf_public_page_cache_clear(): int
     }
 
     $deleted = 0;
-    foreach (glob($cacheDirectory . '/*') ?: [] as $cacheFile) {
-        if (is_file($cacheFile) && @unlink($cacheFile)) {
-            $deleted++;
+    try {
+        foreach (new FilesystemIterator($cacheDirectory, FilesystemIterator::SKIP_DOTS) as $cacheFile) {
+            if ($cacheFile->isFile() && !$cacheFile->isLink() && @unlink($cacheFile->getPathname())) {
+                $deleted++;
+            }
         }
+    } catch (Throwable $e) {
+        error_log('[public_page_cache_clear] ' . $e->getMessage());
     }
     return $deleted;
 }

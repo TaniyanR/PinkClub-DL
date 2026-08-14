@@ -26,11 +26,16 @@ function pcf_resource_cleanup(?PDO $pdo = null, int $batchSize = 500): array
 
     $cacheDirectory = dirname(__DIR__) . '/storage/cache/public-pages';
     $cutoff = time() - 86400;
+    // Clear a large backlog without creating one long CPU spike. The normal
+    // DB batch stays small; cache removal gets a two-second time budget and a
+    // hard ceiling so hundreds of thousands of old files can drain over time.
+    $cacheDeleteLimit = max(10000, $batchSize);
+    $deadline = microtime(true) + 2.0;
     if (is_dir($cacheDirectory)) {
         try {
             $files = new FilesystemIterator($cacheDirectory, FilesystemIterator::SKIP_DOTS);
             foreach ($files as $file) {
-                if ($deleted['cache_files'] >= $batchSize) {
+                if ($deleted['cache_files'] >= $cacheDeleteLimit || microtime(true) >= $deadline) {
                     break;
                 }
                 if ($file->isLink() || !$file->isFile() || strtolower($file->getExtension()) !== 'html') {
