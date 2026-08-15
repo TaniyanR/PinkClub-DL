@@ -348,6 +348,8 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     $affiliateUrl = trim((string)($item['affiliate_url'] ?? $item['url'] ?? ''));
     $sampleFallbackUrl = $affiliateUrl !== '' ? public_url('out.php') . '?' . http_build_query(['to' => $affiliateUrl]) : '';
     $movieClass = ($sample['movie_url'] !== '' || $sampleFallbackUrl !== '') ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
+    $imageClass = $sample['has_images'] ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
+    $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode((string)($item['content_id'] ?? '')));
     $thumbUrl = trim((string)($item['image_small'] ?? ''));
     if ($preferFullPackageImage) {
         $fullPackageImage = pick_full_package_image($item);
@@ -387,6 +389,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         <?php else: ?>
           <button type="button" class="<?= e($movieClass) ?>" disabled>サンプル動画</button>
         <?php endif; ?>
+        <button type="button" class="<?= e($imageClass) ?>" <?= !$sample['has_images'] ? 'disabled' : '' ?> onclick="<?= $sample['has_images'] ? "window.open('" . e($sampleImagesUrl) . "','_blank','noopener,noreferrer,width=760,height=540');" : 'return false;' ?>">サンプル画像</button>
       </div>
     </article>
     <?php

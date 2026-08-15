@@ -691,6 +691,17 @@ if (!function_exists('pcf_render_item_card')) {
         }
         $affiliateUrl = trim((string)($item['affiliate_url'] ?? $item['url'] ?? ''));
         $sampleFallbackUrl = $affiliateUrl !== '' ? public_url('out.php') . '?' . http_build_query(['to' => $affiliateUrl]) : '';
+        $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode($contentId));
+        $hasSampleImages = pcf_pick_sample_image_urls_from_raw($raw) !== [];
+        if (!$hasSampleImages) {
+            foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
+                $sampleImageCandidate = trim((string)$image);
+                if ($sampleImageCandidate !== '' && !pcf_is_self_hosted_duga_image_url($sampleImageCandidate)) {
+                    $hasSampleImages = true;
+                    break;
+                }
+            }
+        }
 
         echo '<article class="pcf-dm-card">';
         echo '<a class="pcf-dm-card__image-link" href="' . e($itemUrl) . '">';
@@ -711,6 +722,11 @@ if (!function_exists('pcf_render_item_card')) {
             echo '<a class="pcf-dm-card__button" href="' . e($sampleFallbackUrl) . '" target="_blank" rel="noopener noreferrer">サンプル動画</a>';
         } else {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル動画</span>';
+        }
+        if ($hasSampleImages && $contentId !== '') {
+            echo '<button type="button" class="pcf-dm-card__button" onclick="window.open(\'' . e($sampleImagesUrl) . '\',\'_blank\',\'noopener,noreferrer,width=760,height=540\');">サンプル画像</button>';
+        } else {
+            echo '<span class="pcf-dm-card__button is-disabled">サンプル画像</span>';
         }
         echo '</div>';
         echo '</article>';
