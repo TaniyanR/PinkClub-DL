@@ -469,6 +469,7 @@ if ($searchHasNext) {
 }
 require __DIR__ . '/partials/header.php';
 ?>
+<?php pcf_render_sample_movie_modal(); ?>
 <?php pcf_render_hero('検索結果', $searchQuery !== '' ? '「' . $searchQuery . '」の商品検索結果です。' : 'キーワードを入力して商品を検索できます。'); ?>
 
 <?php if ($searchQuery === ''): ?>
