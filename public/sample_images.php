@@ -50,13 +50,28 @@ function sample_images_is_self_hosted_duga_image_url(string $url): bool
     return is_string($siteHost) && strcasecmp($host, $siteHost) === 0;
 }
 
+function sample_images_large_duga_digest_url(string $url): string
+{
+    $parts = parse_url($url);
+    if (!is_array($parts) || strcasecmp((string)($parts['host'] ?? ''), 'pic.duga.jp') !== 0) {
+        return $url;
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    if (preg_match('#^(/unsecure/[^/]+/[^/]+)/noauth/scap/([^/]+)$#i', $path, $matches) !== 1) {
+        return $url;
+    }
+
+    return 'https://pic.duga.jp' . $matches[1] . '/cap/' . $matches[2];
+}
+
 function sample_images_collect_from_value(mixed $value, array &$images): void
 {
     if (is_string($value)) {
         foreach (sample_images_parse_list($value) as $candidate) {
             $url = trim((string)$candidate);
             if ($url !== '' && !sample_images_is_self_hosted_duga_image_url($url)) {
-                $images[] = $url;
+                $images[] = sample_images_large_duga_digest_url($url);
             }
         }
         return;
@@ -103,7 +118,13 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
 }
 $images = array_values(array_unique($images));
 if ($images === []) {
-    $images = array_values(array_unique(array_filter(sample_images_parse_list((string)($item['image_list'] ?? '')), static fn($url) => !sample_images_is_self_hosted_duga_image_url((string)$url))));
+    foreach (sample_images_parse_list((string)($item['image_list'] ?? '')) as $image) {
+        $url = trim((string)$image);
+        if ($url !== '' && !sample_images_is_self_hosted_duga_image_url($url)) {
+            $images[] = sample_images_large_duga_digest_url($url);
+        }
+    }
+    $images = array_values(array_unique($images));
 }
 ?>
 <!doctype html>
