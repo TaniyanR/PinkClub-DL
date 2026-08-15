@@ -10,7 +10,6 @@ $searchQuery = trim((string)($_GET['q'] ?? ''));
 
 $navItems = [
     ['href' => public_url(''), 'label' => 'TOP'],
-    ['href' => public_url('items.php'), 'label' => '商品一覧'],
     ['href' => public_url('directory.php?type=actress'), 'label' => '女優一覧'],
     ['href' => public_url('directory.php?type=genre'), 'label' => 'ジャンル一覧'],
     ['href' => public_url('directory.php?type=maker'), 'label' => 'メーカー一覧'],
