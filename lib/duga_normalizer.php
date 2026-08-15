@@ -111,6 +111,29 @@ final class DugaNormalizer
         return array_values(array_unique($images));
     }
 
+    private static function largeDigestImageUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || strcasecmp((string)($parts['host'] ?? ''), 'pic.duga.jp') !== 0) {
+            return $url;
+        }
+
+        $path = (string)($parts['path'] ?? '');
+        if (preg_match('#^(/unsecure/[^/]+/[^/]+)/noauth/scap/([^/]+)$#i', $path, $matches) !== 1) {
+            return $url;
+        }
+
+        return 'https://pic.duga.jp' . $matches[1] . '/cap/' . $matches[2];
+    }
+
+    private static function largeDigestImages(array $images): array
+    {
+        return array_values(array_unique(array_map(
+            static fn (string $url): string => self::largeDigestImageUrl($url),
+            $images
+        )));
+    }
+
     private static function imageForKey(mixed $value, string $targetKey): ?string
     {
         if (!is_array($value)) {
@@ -269,7 +292,8 @@ final class DugaNormalizer
 
             $movie = self::sampleMovie($row);
             $sampleImages = self::sampleImages($row['thumbnail'] ?? []);
-            $primarySampleImage = $sampleImages[0] ?? null;
+            $largeSampleImages = self::largeDigestImages($sampleImages);
+            $primarySampleImage = $largeSampleImages[0] ?? $sampleImages[0] ?? null;
             $packageImage = self::packageImage($row);
             $performers = self::namedList($row['performer'] ?? []);
             $genres = self::namedList($row['category'] ?? []);
@@ -296,7 +320,10 @@ final class DugaNormalizer
                 'series' => $series,
                 'director' => $directors,
             ];
-            $raw['sampleImageURL'] = ['sample_s' => ['image' => $sampleImages], 'sample_l' => ['image' => $sampleImages]];
+            $raw['sampleImageURL'] = [
+                'sample_s' => ['image' => $sampleImages],
+                'sample_l' => ['image' => $largeSampleImages],
+            ];
             if ($movie['movie'] !== null) {
                 $raw['sampleMovieURL'] = [
                     'size_720_480' => $movie['movie'],
