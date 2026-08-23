@@ -18,6 +18,9 @@ function analytics_request_is_automated(?string $userAgent = null): bool
     if ($userAgent === '') {
         return true;
     }
+    if ((string)($_SERVER['HTTP_DNT'] ?? '') === '1' || (string)($_SERVER['HTTP_SEC_GPC'] ?? '') === '1') {
+        return true;
+    }
     if (function_exists('pcf_crawler_guard_is_known_crawler') && pcf_crawler_guard_is_known_crawler($userAgent)) {
         return true;
     }
@@ -30,6 +33,21 @@ function analytics_request_is_automated(?string $userAgent = null): bool
     }
 
     return false;
+}
+
+function analytics_request_is_same_origin(): bool
+{
+    $site = strtolower(trim((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
+    if ($site !== '' && !in_array($site, ['same-origin', 'none'], true)) {
+        return false;
+    }
+    $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+    if ($origin === '') {
+        return false;
+    }
+    $originHost = analytics_normalize_host((string)(parse_url($origin, PHP_URL_HOST) ?: ''));
+    $requestHost = analytics_normalize_host((string)($_SERVER['HTTP_HOST'] ?? ''));
+    return $originHost !== '' && $requestHost !== '' && hash_equals($requestHost, $originHost);
 }
 
 function analytics_normalize_host(string $host): string
@@ -124,7 +142,7 @@ function analytics_track_beacon(): void
 
     try {
     $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-    if (analytics_request_is_automated($ua)) {
+    if (analytics_request_is_automated($ua) || !analytics_request_is_same_origin()) {
         return;
     }
     $hash = analytics_visitor_hash($ua);
@@ -146,6 +164,11 @@ function analytics_track_beacon(): void
     $refCode = trim((string)($_POST['ref'] ?? ''));
 
     $pdo = db();
+    $duplicateStmt = $pdo->prepare("SELECT 1 FROM site_events WHERE event_type='pv' AND ip_hash=:ip AND path=:path AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND) LIMIT 1");
+    $duplicateStmt->execute([':ip' => $hash, ':path' => $pathForStats]);
+    if ($duplicateStmt->fetchColumn() !== false) {
+        return;
+    }
     $visitStmt = $pdo->prepare('INSERT IGNORE INTO visit_sessions(stat_date,visitor_hash,first_seen_at) VALUES(:d,:h,NOW())');
     $visitStmt->execute([':d' => $today, ':h' => $hash]);
     $isUniqueVisitor = $visitStmt->rowCount() === 1;
