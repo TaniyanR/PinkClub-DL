@@ -6,6 +6,8 @@ require_once __DIR__ . '/../../lib/site_settings.php';
 
 if (headers_sent() === false) {
     header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: private, no-store, max-age=0');
+    header('Referrer-Policy: no-referrer');
 }
 
 $siteTitle = trim(site_title_setting(''));

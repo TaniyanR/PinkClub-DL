@@ -28,17 +28,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $password = (string)($_POST['password'] ?? '');
         $passwordConfirm = (string)($_POST['password_confirm'] ?? '');
-        if (strlen($password) < 8) {
-            $error = '新しいパスワードは8文字以上で入力してください。';
+        if (strlen($password) < 12) {
+            $error = '新しいパスワードは12文字以上で入力してください。';
         } elseif ($password !== $passwordConfirm) {
             $error = '確認用パスワードが一致しません。';
         } else {
-            $adminUserId = (int)$reset['admin_user_id'];
-            db()->prepare('UPDATE admins SET password_hash=:h, updated_at=NOW() WHERE id=:id')
-                ->execute([':h' => password_hash($password, PASSWORD_DEFAULT), ':id' => $adminUserId]);
-            db()->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE id=:id')->execute([':id' => (int)$reset['id']]);
-            $_SESSION['forgot_password_success'] = 'パスワードを再設定しました。新しいパスワードでログインしてください。';
-            app_redirect(login_url());
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $lockedStmt = $pdo->prepare('SELECT id, admin_user_id FROM admin_password_resets WHERE id=:id AND token_hash=:h AND used_at IS NULL AND expires_at >= NOW() FOR UPDATE');
+                $lockedStmt->execute([':id' => (int)$reset['id'], ':h' => hash('sha256', $token)]);
+                $lockedReset = $lockedStmt->fetch(PDO::FETCH_ASSOC);
+                if (!is_array($lockedReset)) {
+                    $pdo->rollBack();
+                    $error = 'リセットトークンが無効または期限切れです。';
+                } else {
+                    $pdo->prepare('UPDATE admins SET password_hash=:h, updated_at=NOW() WHERE id=:id')
+                        ->execute([':h' => password_hash($password, PASSWORD_DEFAULT), ':id' => (int)$lockedReset['admin_user_id']]);
+                    $pdo->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE id=:id AND used_at IS NULL')->execute([':id' => (int)$lockedReset['id']]);
+                    $pdo->commit();
+                }
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $exception;
+            }
+            if ($error === '') {
+                $_SESSION['forgot_password_success'] = 'パスワードを再設定しました。新しいパスワードでログインしてください。';
+                app_redirect(login_url());
+            }
         }
     }
 }
@@ -51,8 +70,8 @@ include __DIR__ . '/partials/login_header.php';
     <?php if ($error !== '') : ?><div class="admin-card login-alert"><p><?php echo e($error); ?></p></div><?php endif; ?>
     <form class="admin-card login-card" method="post" action="<?php echo e(public_url('reset_password.php') . '?token=' . rawurlencode($token)); ?>">
         <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
-        <label>新しいパスワード</label><input type="password" name="password" minlength="8" required>
-        <label>新しいパスワード（確認）</label><input type="password" name="password_confirm" minlength="8" required>
+        <label>新しいパスワード</label><input type="password" name="password" minlength="12" required>
+        <label>新しいパスワード（確認）</label><input type="password" name="password_confirm" minlength="12" required>
         <button type="submit">再設定する</button>
     </form>
 </div>

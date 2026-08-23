@@ -19,8 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'メールアドレスの形式が正しくありません。';
-    } elseif ($password !== '' && strlen($password) < 8) {
-        $error = 'パスワードは8文字以上で入力してください。';
+    } elseif ($password !== '' && strlen($password) < 12) {
+        $error = 'パスワードは12文字以上で入力してください。';
     } elseif ($password !== $passwordConfirm) {
         $error = '確認用パスワードが一致しません。';
     } elseif ($adminId <= 0) {
@@ -74,10 +74,10 @@ require __DIR__ . '/includes/header.php';
       <input type="email" name="email" value="<?= e(setting_admin_email('')) ?>">
     </label>
     <label>新しいパスワード
-      <input type="password" name="password" minlength="8" autocomplete="new-password">
+      <input type="password" name="password" minlength="12" autocomplete="new-password">
     </label>
     <label>新しいパスワード（確認）
-      <input type="password" name="password_confirm" minlength="8" autocomplete="new-password">
+      <input type="password" name="password_confirm" minlength="12" autocomplete="new-password">
     </label>
     <div class="admin-actions">
       <button type="submit">保存</button>
