@@ -79,7 +79,7 @@ $autoStates = $stateStmt ? $stateStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
 require __DIR__ . '/includes/header.php';
 ?>
-<section class="card">
+<section class="card admin-auto-settings">
   <h1>自動設定</h1>
   <?php if ($message !== ''): ?>
     <div class="admin-notice <?= $messageType === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>">
@@ -87,10 +87,10 @@ require __DIR__ . '/includes/header.php';
     </div>
   <?php endif; ?>
 
-  <form method="post" class="stack" style="max-width:980px;">
+  <form method="post" class="stack admin-auto-settings__form">
     <?= csrf_input() ?>
 
-    <div style="display:grid;grid-template-columns:160px minmax(280px,1fr);gap:12px 16px;align-items:center;">
+    <div class="admin-auto-settings__grid">
       <div><strong>自動更新を有効化</strong></div>
       <div style="text-align:left;">
         <input type="hidden" name="item_sync_enabled" value="0">
@@ -119,7 +119,7 @@ require __DIR__ . '/includes/header.php';
     <h2 style="margin-top:20px;">複合キーワード（最大5）</h2>
     <p>単体キーワード（例: 学園）または複合（例: A,B）を入力できます。複合はAPIに「BはAが大好き」として渡します。</p>
 
-    <div style="display:grid;grid-template-columns:160px minmax(280px,1fr);gap:12px 16px;align-items:center;">
+    <div class="admin-auto-settings__grid">
       <?php for ($i = 1; $i <= 5; $i++): ?>
         <div><strong>キーワード<?= e((string)$i) ?></strong></div>
         <div><input type="text" name="item_sync_compound_<?= e((string)$i) ?>" value="<?= e((string)($compoundLines[$i - 1] ?? '')) ?>" placeholder="A,B" style="width:100%;"></div>
@@ -129,7 +129,7 @@ require __DIR__ . '/includes/header.php';
     <h2 style="margin-top:20px;">拒否（禁止）キーワード（最大5）</h2>
     <p>タイトル部分一致で除外します（表示/投稿どちらにも適用）。</p>
 
-    <div style="display:grid;grid-template-columns:160px minmax(280px,1fr);gap:12px 16px;align-items:center;">
+    <div class="admin-auto-settings__grid">
       <?php for ($i = 1; $i <= 5; $i++): ?>
         <div><strong>除外キーワード<?= e((string)$i) ?></strong></div>
         <div><input type="text" name="item_sync_exclude_<?= e((string)$i) ?>" value="<?= e((string)($excludeLines[$i - 1] ?? '')) ?>" style="width:100%;"></div>
@@ -141,19 +141,21 @@ require __DIR__ . '/includes/header.php';
 
 
   <h2 style="margin-top:24px;">自動更新状態</h2>
-  <table class="admin-table">
-    <tr><th>ジョブ</th><th>最終実行日時</th><th>成功</th><th>メッセージ</th><th>次回offset</th><th>ロック期限</th></tr>
-    <?php foreach ($autoStates as $state): ?>
-      <tr>
-        <td><?= e(['items' => '商品'][(string)($state['job_key'] ?? '')] ?? (string)($state['job_key'] ?? '')) ?></td>
-        <td><?= e((string)($state['last_run_at'] ?? '')) ?></td>
-        <td><?= ((int)($state['last_success'] ?? 0) === 1) ? '成功' : '未成功' ?></td>
-        <td><?= e((string)($state['last_message'] ?? '')) ?></td>
-        <td><?= e((string)($state['next_offset'] ?? '1')) ?></td>
-        <td><?= e((string)($state['lock_until'] ?? '')) ?></td>
-      </tr>
-    <?php endforeach; ?>
-  </table>
+  <div class="admin-auto-settings__table-wrap">
+    <table class="admin-table">
+      <tr><th>ジョブ</th><th>最終実行日時</th><th>成功</th><th>メッセージ</th><th>次回offset</th><th>ロック期限</th></tr>
+      <?php foreach ($autoStates as $state): ?>
+        <tr>
+          <td><?= e(['items' => '商品'][(string)($state['job_key'] ?? '')] ?? (string)($state['job_key'] ?? '')) ?></td>
+          <td><?= e((string)($state['last_run_at'] ?? '')) ?></td>
+          <td><?= ((int)($state['last_success'] ?? 0) === 1) ? '成功' : '未成功' ?></td>
+          <td><?= e((string)($state['last_message'] ?? '')) ?></td>
+          <td><?= e((string)($state['next_offset'] ?? '1')) ?></td>
+          <td><?= e((string)($state['lock_until'] ?? '')) ?></td>
+        </tr>
+      <?php endforeach; ?>
+    </table>
+  </div>
 
   <?php if ($enabled): ?>
     <div class="admin-notice admin-notice--success" id="auto-timer-status">
