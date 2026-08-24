@@ -13,6 +13,11 @@ $autoSetup = installer_auto_run_if_needed();
 if (($autoSetup['success'] ?? false) !== true) {
     app_redirect('/public/setup_check.php');
 }
+$autoSetupPassword = $autoSetup['result']['initial_password'] ?? null;
+if (is_string($autoSetupPassword) && $autoSetupPassword !== '') {
+    $_SESSION['setup_initial_password_once'] = $autoSetupPassword;
+    app_redirect('/public/setup_check.php');
+}
 
 if (auth_user()) {
     app_redirect(ADMIN_HOME_PATH);
