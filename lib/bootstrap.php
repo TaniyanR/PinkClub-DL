@@ -89,6 +89,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/http_url.php';
 
 if (!headers_sent()) {
     header('X-Content-Type-Options: nosniff');

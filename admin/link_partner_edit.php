@@ -19,18 +19,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $url = trim((string)post('url', ''));
     $rssUrl = trim((string)post('rss_url', ''));
 
-    db()->prepare('UPDATE partner_sites SET name = :name, url = :url, updated_at = NOW() WHERE id = :id')
-        ->execute([':name' => $name, ':url' => $url, ':id' => $id]);
+    $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+    if (filter_var($url, FILTER_VALIDATE_URL) === false
+        || !in_array($siteScheme, ['http', 'https'], true)
+        || ($rssUrl !== '' && !http_url_is_public($rssUrl))) {
+        $message = '公開HTTP(S) URLを入力してください。';
+    } else {
+        db()->prepare('UPDATE partner_sites SET name = :name, url = :url, updated_at = NOW() WHERE id = :id')
+            ->execute([':name' => $name, ':url' => $url, ':id' => $id]);
 
-    $rssId = (int)post('rss_id', 0);
-    if ($rssId > 0) {
-        db()->prepare('UPDATE partner_rss SET feed_url = :url, updated_at = NOW() WHERE id = :id')
-            ->execute([':url' => $rssUrl, ':id' => $rssId]);
-    } elseif ($rssUrl !== '') {
-        db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,1,NOW(),NOW())')
-            ->execute([':sid' => $id, ':url' => $rssUrl]);
+        $rssId = (int)post('rss_id', 0);
+        if ($rssId > 0) {
+            db()->prepare('UPDATE partner_rss SET feed_url = :url, updated_at = NOW() WHERE id = :id')
+                ->execute([':url' => $rssUrl, ':id' => $rssId]);
+        } elseif ($rssUrl !== '') {
+            db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,1,NOW(),NOW())')
+                ->execute([':sid' => $id, ':url' => $rssUrl]);
+        }
+        $message = '相互リンク情報を更新しました。';
     }
-    $message = '相互リンク情報を更新しました。';
 }
 
 $stmt = db()->prepare('SELECT ps.*, pr.id AS rss_id, pr.feed_url FROM partner_sites ps LEFT JOIN partner_rss pr ON pr.partner_site_id = ps.id WHERE ps.id = :id LIMIT 1');

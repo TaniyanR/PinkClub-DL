@@ -14,28 +14,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim((string)post('name', ''));
         $url = trim((string)post('url', ''));
         $rssUrl = trim((string)post('rss_url', ''));
-        $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
+        $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        if (filter_var($url, FILTER_VALIDATE_URL) === false
+            || !in_array($siteScheme, ['http', 'https'], true)
+            || ($rssUrl !== '' && !http_url_is_public($rssUrl))) {
+            $message = '公開HTTP(S) URLを入力してください。';
+        } else {
+            $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
 
-        db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')
-            ->execute([
-                ':name' => $name,
-                ':ref' => $refCode,
-                ':url' => $url,
-                ':show_link' => post('show_link', '0') === '1' ? 1 : 0,
-            ]);
-
-        $siteId = (int)db()->lastInsertId();
-        if ($siteId > 0 && $rssUrl !== '') {
-            db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')
+            db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')
                 ->execute([
-                    ':sid' => $siteId,
-                    ':url' => $rssUrl,
-                    ':show_rss' => post('show_rss', '0') === '1' ? 1 : 0,
+                    ':name' => $name,
+                    ':ref' => $refCode,
+                    ':url' => $url,
+                    ':show_link' => post('show_link', '0') === '1' ? 1 : 0,
                 ]);
-        }
 
-        site_setting_set('link.sort_mode', post('sort_mode', 'registered') === 'kana' ? 'kana' : 'registered');
-        $message = '相互リンクを追加しました。';
+            $siteId = (int)db()->lastInsertId();
+            if ($siteId > 0 && $rssUrl !== '') {
+                db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')
+                    ->execute([
+                        ':sid' => $siteId,
+                        ':url' => $rssUrl,
+                        ':show_rss' => post('show_rss', '0') === '1' ? 1 : 0,
+                    ]);
+            }
+
+            site_setting_set('link.sort_mode', post('sort_mode', 'registered') === 'kana' ? 'kana' : 'registered');
+            $message = '相互リンクを追加しました。';
+        }
     } elseif ($action === 'toggle_link') {
         db()->prepare('UPDATE partner_sites SET show_link = :show, updated_at = NOW() WHERE id = :id')
             ->execute([':show' => post('show_link', '0') === '1' ? 1 : 0, ':id' => (int)post('id', 0)]);

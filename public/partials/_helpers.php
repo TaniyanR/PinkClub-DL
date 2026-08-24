@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../lib/http_url.php';
+
 if (!function_exists('get_ad_code')) {
     function get_ad_code(string $position_key): ?string
     {
@@ -52,11 +54,11 @@ if (!function_exists('rss_widget_direct_items')) {
         }
 
         try {
-            $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1 ORDER BY RAND() LIMIT 50');
+            $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1 ORDER BY pr.updated_at ASC, pr.id ASC LIMIT 12');
             $sources = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
         } catch (Throwable) {
             try {
-                $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND pr.is_enabled = 1 ORDER BY RAND() LIMIT 50');
+                $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND pr.is_enabled = 1 ORDER BY pr.updated_at ASC, pr.id ASC LIMIT 12');
                 $sources = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
             } catch (Throwable) {
                 $sources = [];
@@ -71,20 +73,19 @@ if (!function_exists('rss_widget_direct_items')) {
         $items = [];
         $seen = [];
         $perSourceLimit = $requireImage ? 5 : 5;
-        $context = stream_context_create(['http' => ['timeout' => 2, 'user_agent' => 'PinkClubRSS/1.0']]);
         foreach ($sources as $source) {
             $feedUrl = trim((string)($source['feed_url'] ?? ''));
             if ($feedUrl === '') {
                 continue;
             }
 
-            $xmlRaw = @file_get_contents($feedUrl, false, $context);
+            $xmlRaw = http_fetch_public($feedUrl, 2);
             if (!is_string($xmlRaw) || $xmlRaw === '') {
                 continue;
             }
 
             libxml_use_internal_errors(true);
-            $xml = simplexml_load_string($xmlRaw);
+            $xml = simplexml_load_string($xmlRaw, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
             if ($xml === false) {
                 continue;
             }
