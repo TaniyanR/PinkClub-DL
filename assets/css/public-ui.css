@@ -972,3 +972,15 @@
     object-position: center top !important;
   }
 }
+/* 「サイトについて」の逆アクセスランキング。PinkClub-DUGAと表示を統一する。 */
+.pcf-reverse-ranking { display:grid; gap:8px; margin:10px 0 18px; padding:0; list-style:none; }
+.pcf-reverse-ranking__row { display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:12px; min-height:54px; padding:8px 14px; border:1px solid #e3e8f1; border-radius:10px; background:#fff; box-shadow:0 5px 16px rgba(35,54,92,.06); }
+.pcf-reverse-ranking__position { display:grid; place-items:center; width:32px; height:32px; border-radius:9px; background:#e9eef8; color:#2f4f85; font-weight:900; }
+.pcf-reverse-ranking__row:nth-child(-n+3) .pcf-reverse-ranking__position { background:linear-gradient(135deg,#ff4f9a,#d81b60); color:#fff; }
+.pcf-reverse-ranking__site { min-width:0; overflow-wrap:anywhere; font-weight:800; }
+.pcf-reverse-ranking__site a { color:#194ea9; text-decoration:none; }
+.pcf-reverse-ranking__site a:hover { color:#d81b60; text-decoration:underline; }
+.pcf-reverse-ranking__count { color:#7a8292; font-size:11px; white-space:nowrap; }
+.pcf-reverse-ranking__count strong { color:#d81b60; font-size:16px; }
+.pcf-reverse-ranking__empty { padding:18px; border:1px dashed #cfd7e5; border-radius:10px; background:#f8faff; color:#687186; text-align:center; }
+@media(max-width:560px){.pcf-reverse-ranking__row{grid-template-columns:34px minmax(0,1fr);gap:9px}.pcf-reverse-ranking__count{grid-column:2}.pcf-reverse-ranking__position{width:29px;height:29px}}

@@ -389,7 +389,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         <?php else: ?>
           <button type="button" class="<?= e($movieClass) ?>" disabled>サンプル動画</button>
         <?php endif; ?>
-        <button type="button" class="<?= e($imageClass) ?>" <?= !$sample['has_images'] ? 'disabled' : '' ?> onclick="<?= $sample['has_images'] ? "window.open('" . e($sampleImagesUrl) . "','_blank','noopener,noreferrer,width=760,height=540');" : 'return false;' ?>">サンプル画像</button>
+        <button type="button" class="<?= e($imageClass) ?><?= $sample['has_images'] ? ' sample-image-trigger' : '' ?>" <?= !$sample['has_images'] ? 'disabled' : '' ?><?= $sample['has_images'] ? ' data-sample-images-url="' . e($sampleImagesUrl) . '" data-sample-images-title="' . e($title) . '"' : '' ?>>サンプル画像</button>
       </div>
     </article>
     <?php

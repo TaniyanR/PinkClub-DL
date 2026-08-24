@@ -85,7 +85,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
   </div>
   <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
 </footer>
-<script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" data-sample-image-modal-css="<?= e(asset_url('css/sample-image-modal.css')) ?>" defer></script>
+<script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
 <script>
 (function () {
   var header = document.querySelector('.site-header');

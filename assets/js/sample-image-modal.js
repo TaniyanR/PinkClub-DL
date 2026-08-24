@@ -1,8 +1,6 @@
 (function () {
   'use strict';
 
-  var script = document.currentScript;
-  var cssUrl = script && script.dataset ? script.dataset.sampleImageModalCss : '';
   var modal = null;
   var mainImage = null;
   var thumbs = null;
@@ -13,19 +11,47 @@
   var images = [];
   var activeIndex = 0;
   var returnFocus = null;
+  var savedScrollY = 0;
 
-  function ensureStylesheet() {
-    if (!cssUrl || document.querySelector('link[data-sample-image-modal-css]')) return;
-    var link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = cssUrl;
-    link.setAttribute('data-sample-image-modal-css', '1');
-    document.head.appendChild(link);
+  function sampleJsonUrl(url) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      parsed.searchParams.set('format', 'json');
+      return parsed.toString();
+    } catch (error) {
+      return url + (url.indexOf('?') === -1 ? '?' : '&') + 'format=json';
+    }
+  }
+
+  function cardTitle(button) {
+    var card = button.closest('.rail-card, .pcf-dm-card');
+    if (!card) return '';
+    var title = card.querySelector('.rail-card__title, .pcf-dm-card__title');
+    return title ? String(title.textContent || '').trim() : '';
+  }
+
+  function upgradeLegacyButtons(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var buttons = scope.querySelectorAll('button[onclick*="sample_images.php"]');
+    Array.prototype.forEach.call(buttons, function (button) {
+      if (button.disabled) return;
+      var inline = button.getAttribute('onclick') || '';
+      var match = inline.match(/window\.open\(\s*['\"]([^'\"]*sample_images\.php[^'\"]*)['\"]/i);
+      if (!match || !match[1]) return;
+      button.removeAttribute('onclick');
+      button.classList.add('sample-image-trigger');
+      button.dataset.sampleImagesUrl = sampleJsonUrl(match[1]);
+      button.dataset.sampleImagesTitle = cardTitle(button);
+    });
+
+    Array.prototype.forEach.call(scope.querySelectorAll('.sample-image-trigger[data-sample-images-url]'), function (button) {
+      button.dataset.sampleImagesUrl = sampleJsonUrl(button.dataset.sampleImagesUrl || '');
+      if (!button.dataset.sampleImagesTitle) button.dataset.sampleImagesTitle = cardTitle(button);
+    });
   }
 
   function buildModal() {
     if (modal) return;
-    ensureStylesheet();
     modal = document.createElement('div');
     modal.className = 'sample-image-modal';
     modal.setAttribute('aria-hidden', 'true');
@@ -38,7 +64,7 @@
         '</header>' +
         '<div class="sample-image-modal__stage">' +
           '<button type="button" class="sample-image-modal__arrow sample-image-modal__arrow--prev" aria-label="前の画像">‹</button>' +
-          '<img class="sample-image-modal__main" alt="">' +
+          '<img class="sample-image-modal__main" src="" alt="">' +
           '<button type="button" class="sample-image-modal__arrow sample-image-modal__arrow--next" aria-label="次の画像">›</button>' +
           '<p class="sample-image-modal__status" role="status"></p>' +
         '</div>' +
@@ -90,45 +116,16 @@
     });
   }
 
-  function legacySampleUrl(trigger) {
-    var onclick = trigger.getAttribute('onclick') || '';
-    var match = onclick.match(/window\.open\(\s*['"]([^'"]*sample_images\.php[^'"]*)['"]/i);
-    if (!match) return '';
-    try {
-      var url = new URL(match[1], window.location.href);
-      url.searchParams.set('format', 'json');
-      return url.toString();
-    } catch (e) {
-      return '';
-    }
-  }
-
-  function triggerData(trigger) {
-    var url = trigger.dataset.sampleImagesUrl || legacySampleUrl(trigger);
-    if (!url) return null;
-    try {
-      var normalized = new URL(url, window.location.href);
-      normalized.searchParams.set('format', 'json');
-      url = normalized.toString();
-    } catch (e) {
-      return null;
-    }
-    var card = trigger.closest('.rail-card,.pcf-dm-card,.card');
-    var title = trigger.dataset.sampleImagesTitle || '';
-    if (!title && card) {
-      var titleNodeInCard = card.querySelector('.rail-card__title,.pcf-dm-card__title,a[href*="item.php"]');
-      title = titleNodeInCard ? titleNodeInCard.textContent.trim() : '';
-    }
-    return {url: url, title: title || 'サンプル画像'};
-  }
-
-  function openModal(trigger, data) {
+  function openModal(trigger) {
+    var url = trigger.dataset.sampleImagesUrl || '';
+    if (!url) return;
     buildModal();
     returnFocus = trigger;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
     images = [];
     thumbs.innerHTML = '';
     mainImage.removeAttribute('src');
-    titleNode.textContent = data.title;
+    titleNode.textContent = trigger.dataset.sampleImagesTitle || 'サンプル画像';
     statusNode.textContent = '画像を読み込んでいます…';
     previousButton.hidden = true;
     nextButton.hidden = true;
@@ -137,14 +134,19 @@
     document.body.classList.add('sample-image-modal-open');
     modal.querySelector('.sample-image-modal__close').focus();
 
-    fetch(data.url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    fetch(sampleJsonUrl(url), {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    })
       .then(function (response) {
         if (!response.ok) throw new Error('sample image request failed');
         return response.json();
       })
       .then(function (payload) {
-        images = Array.isArray(payload.images) ? payload.images.filter(function (url) { return /^https?:\/\//i.test(url); }) : [];
-        titleNode.textContent = payload.title || data.title;
+        images = Array.isArray(payload.images)
+          ? payload.images.filter(function (urlValue) { return /^https?:\/\//i.test(urlValue); })
+          : [];
+        titleNode.textContent = payload.title || trigger.dataset.sampleImagesTitle || 'サンプル画像';
         if (!images.length) {
           statusNode.textContent = '表示できるサンプル画像がありません。';
           return;
@@ -163,18 +165,18 @@
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('sample-image-modal-open');
     mainImage.removeAttribute('src');
+    window.scrollTo(0, savedScrollY);
     if (returnFocus) returnFocus.focus();
   }
 
+  upgradeLegacyButtons(document);
+
   document.addEventListener('click', function (event) {
-    var trigger = event.target.closest('.sample-image-trigger,button[onclick*="sample_images.php"]');
-    if (!trigger || trigger.disabled) return;
-    var data = triggerData(trigger);
-    if (!data) return;
+    var trigger = event.target.closest('.sample-image-trigger');
+    if (!trigger || trigger.disabled || !trigger.dataset.sampleImagesUrl) return;
     event.preventDefault();
-    event.stopImmediatePropagation();
-    openModal(trigger, data);
-  }, true);
+    openModal(trigger);
+  });
 
   document.addEventListener('keydown', function (event) {
     if (!modal || !modal.classList.contains('is-open')) return;

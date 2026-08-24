@@ -286,6 +286,12 @@ $contactForm = [
 ];
 
 $isContactPage = $slug === CONTACT_PAGE_SLUG;
+$contactFormType = $isContactPage && (string)($_GET['type'] ?? '') === 'deletion' ? 'deletion' : 'contact';
+$deletionReceipt = $isContactPage ? trim((string)($_GET['receipt'] ?? '')) : '';
+$deletionError = $isContactPage ? trim((string)($_GET['deletion_error'] ?? '')) : '';
+if ($deletionReceipt !== '' || $deletionError !== '') {
+    $contactFormType = 'deletion';
+}
 
 if ($isContactPage && (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')) {
     $rateLimitAllowed = rate_limit_allow('contact_form', 3, 300);
@@ -420,7 +426,10 @@ if ($slug === 'about' || $slug === 'privacy-policy') {
     );
 }
 
-$pageTitle = (string)((($p['seo_title'] ?? '') !== '') ? $p['seo_title'] : $p['title']);
+$displayPageTitle = $isContactPage ? 'お問い合わせ・掲載削除依頼' : (string)$p['title'];
+$pageTitle = $isContactPage
+    ? $displayPageTitle
+    : (string)((($p['seo_title'] ?? '') !== '') ? $p['seo_title'] : $p['title']);
 $pageDescription = (string)($p['seo_description'] ?? '');
 $canonicalUrl = public_url('page.php?slug=' . rawurlencode($slug));
 $ogUrl = $canonicalUrl;
@@ -446,40 +455,108 @@ if ($slug === 'about') {
 include __DIR__ . '/partials/header.php';
 ?>
         <section class="block">
-            <h1 class="section-title"><?php echo e((string)$p['title']); ?></h1>
-            <?php echo $pageBodyHtml; ?>
+            <h1 class="section-title"><?php echo e($displayPageTitle); ?></h1>
+            <?php if ($isContactPage) : ?>
+                <p>ご用件に応じて、下記からフォームを選択してください。</p>
+            <?php else : ?>
+                <?php echo $pageBodyHtml; ?>
+            <?php endif; ?>
         </section>
 
         <?php if ($isContactPage) : ?>
             <section class="block">
-                <h2 class="section-title">お問い合わせフォーム</h2>
-                <?php if ($contactSuccess) : ?>
-                    <p>送信しました</p>
-                <?php else : ?>
-                    <?php foreach ($formErrors as $error) : ?>
-                        <p><?php echo e((string)$error); ?></p>
-                    <?php endforeach; ?>
-                    <form class="contact-form" method="post" action="<?php echo e((string)($_SERVER['REQUEST_URI'] ?? '/page.php?slug=que')); ?>">
+                <div class="contact-form-tabs" role="tablist" aria-label="お問い合わせ種別">
+                    <button id="contact-tab-contact" type="button" class="contact-form-tab<?= $contactFormType === 'contact' ? ' is-active' : '' ?>" data-contact-form="contact" role="tab" aria-controls="contact-panel-contact" aria-selected="<?= $contactFormType === 'contact' ? 'true' : 'false' ?>" tabindex="<?= $contactFormType === 'contact' ? '0' : '-1' ?>">一般のお問い合わせ</button>
+                    <button id="contact-tab-deletion" type="button" class="contact-form-tab<?= $contactFormType === 'deletion' ? ' is-active' : '' ?>" data-contact-form="deletion" role="tab" aria-controls="contact-panel-deletion" aria-selected="<?= $contactFormType === 'deletion' ? 'true' : 'false' ?>" tabindex="<?= $contactFormType === 'deletion' ? '0' : '-1' ?>"><span>掲載削除依頼</span><small>本人確認書類が必要</small></button>
+                </div>
+
+                <div id="contact-panel-contact" data-contact-panel="contact" role="tabpanel" aria-labelledby="contact-tab-contact"<?= $contactFormType !== 'contact' ? ' hidden' : '' ?>>
+                    <h2 class="section-title">一般のお問い合わせ</h2>
+                    <p>ご不明な点やご意見・ご要望などをお送りください。</p>
+                    <?php if ($contactSuccess) : ?>
+                        <p class="contact-form-notice is-success">お問い合わせを送信しました。</p>
+                    <?php else : ?>
+                        <?php foreach ($formErrors as $error) : ?>
+                            <p class="contact-form-notice is-error"><?php echo e((string)$error); ?></p>
+                        <?php endforeach; ?>
+                        <form class="contact-form" method="post" action="<?php echo e(public_url('page.php?slug=que')); ?>">
+                            <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
+                            <input type="hidden" name="contact_form_id" value="<?php echo e($contactFormId); ?>">
+                            <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="display:none">
+
+                            <label for="contact-name">氏名（必須）</label>
+                            <input id="contact-name" name="name" value="<?php echo e($contactForm['name']); ?>" maxlength="100" required>
+
+                            <label for="contact-email">メールアドレス（必須）</label>
+                            <input id="contact-email" name="email" type="email" value="<?php echo e($contactForm['email']); ?>" maxlength="254" required>
+
+                            <label for="contact-subject">題名</label>
+                            <input id="contact-subject" name="subject" value="<?php echo e($contactForm['subject']); ?>" maxlength="200" required>
+
+                            <label for="contact-message">内容</label>
+                            <textarea id="contact-message" name="message" rows="10" maxlength="5000" required><?php echo e($contactForm['message']); ?></textarea>
+
+                            <button type="submit">送信</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+
+                <div id="contact-panel-deletion" data-contact-panel="deletion" role="tabpanel" aria-labelledby="contact-tab-deletion"<?= $contactFormType !== 'deletion' ? ' hidden' : '' ?>>
+                    <h2 class="section-title">掲載削除依頼</h2>
+                    <p>出演者ご本人、正当な代理人または権利者から受け付けます。入力内容と本人確認書類は管理画面・データベースに保存せず、受付用メールにのみ送信します。</p>
+                    <?php if ($deletionReceipt !== '') : ?>
+                        <p class="contact-form-notice is-success">掲載削除依頼を受け付けました。受付番号：<?php echo e($deletionReceipt); ?></p>
+                    <?php elseif ($deletionError !== '') : ?>
+                        <p class="contact-form-notice is-error"><?php echo e($deletionError); ?></p>
+                    <?php endif; ?>
+                    <form class="contact-form" method="post" action="<?php echo e(public_url('deletion_request_submit.php')); ?>" enctype="multipart/form-data">
                         <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
-                        <input type="hidden" name="contact_form_id" value="<?php echo e($contactFormId); ?>">
                         <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="display:none">
 
-                        <label for="contact-name">氏名</label>
-                        <input id="contact-name" name="name" value="<?php echo e($contactForm['name']); ?>" maxlength="100" required>
+                        <label for="deletion-name">お名前（本名・必須）</label>
+                        <input id="deletion-name" name="deletion_name" maxlength="100" placeholder="例：山田 花子" required>
 
-                        <label for="contact-email">メールアドレス</label>
-                        <input id="contact-email" name="email" type="email" value="<?php echo e($contactForm['email']); ?>" maxlength="254" required>
+                        <label for="deletion-email">連絡用メールアドレス（必須）</label>
+                        <input id="deletion-email" name="deletion_email" type="email" maxlength="254" placeholder="例：example@example.com" required>
 
-                        <label for="contact-subject">題名</label>
-                        <input id="contact-subject" name="subject" value="<?php echo e($contactForm['subject']); ?>" maxlength="200" required>
+                        <label for="deletion-phone">電話番号（任意）</label>
+                        <input id="deletion-phone" name="deletion_phone" maxlength="30" placeholder="例：090-1234-5678">
 
-                        <label for="contact-message">内容</label>
-                        <textarea id="contact-message" name="message" rows="10" maxlength="5000" required><?php echo e($contactForm['message']); ?></textarea>
+                        <label for="deletion-urls">該当ページURL（必須）</label>
+                        <textarea id="deletion-urls" name="deletion_urls" rows="5" maxlength="5000" placeholder="複数ある場合は1行ずつ全て記載してください" required></textarea>
 
-                        <button type="submit">送信</button>
+                        <label for="identity-document">本人確認書類（必須）</label>
+                        <input id="identity-document" name="identity_document" type="file" accept="image/jpeg,image/png,application/pdf" required>
+                        <small>JPEG・PNG・PDF、5MB以内。受付メールに添付して送信し、当サイトのサーバーには保存しません。</small>
+
+                        <label for="deletion-reason">申請理由（必須）</label>
+                        <textarea id="deletion-reason" name="deletion_reason" rows="8" maxlength="5000" placeholder="削除を希望する理由と経緯をご記入ください" required></textarea>
+
+                        <div class="deletion-consent">
+                            <input id="deletion-consent" type="checkbox" name="deletion_consent" value="1" required>
+                            <label for="deletion-consent">プライバシーポリシーを読み、本人確認書類を提出することに同意します（提出書類は本人確認の目的以外には使用しません）。</label>
+                        </div>
+
+                        <button type="submit">掲載削除依頼を送信する</button>
                     </form>
-                <?php endif; ?>
+                </div>
             </section>
+            <script>
+            (() => {
+                const tabs = document.querySelectorAll('[data-contact-form]');
+                const panels = document.querySelectorAll('[data-contact-panel]');
+                tabs.forEach((tab) => tab.addEventListener('click', () => {
+                    const type = tab.dataset.contactForm || 'contact';
+                    tabs.forEach((button) => {
+                        const active = button.dataset.contactForm === type;
+                        button.classList.toggle('is-active', active);
+                        button.setAttribute('aria-selected', active ? 'true' : 'false');
+                        button.tabIndex = active ? 0 : -1;
+                    });
+                    panels.forEach((panel) => { panel.hidden = panel.dataset.contactPanel !== type; });
+                }));
+            })();
+            </script>
         <?php endif; ?>
 
 <?php include __DIR__ . '/partials/footer.php'; ?>
