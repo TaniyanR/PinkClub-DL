@@ -23,33 +23,6 @@
     }
   }
 
-  function cardTitle(button) {
-    var card = button.closest('.rail-card, .pcf-dm-card');
-    if (!card) return '';
-    var title = card.querySelector('.rail-card__title, .pcf-dm-card__title');
-    return title ? String(title.textContent || '').trim() : '';
-  }
-
-  function upgradeLegacyButtons(root) {
-    var scope = root && root.querySelectorAll ? root : document;
-    var buttons = scope.querySelectorAll('button[onclick*="sample_images.php"]');
-    Array.prototype.forEach.call(buttons, function (button) {
-      if (button.disabled) return;
-      var inline = button.getAttribute('onclick') || '';
-      var match = inline.match(/window\.open\(\s*['\"]([^'\"]*sample_images\.php[^'\"]*)['\"]/i);
-      if (!match || !match[1]) return;
-      button.removeAttribute('onclick');
-      button.classList.add('sample-image-trigger');
-      button.dataset.sampleImagesUrl = sampleJsonUrl(match[1]);
-      button.dataset.sampleImagesTitle = cardTitle(button);
-    });
-
-    Array.prototype.forEach.call(scope.querySelectorAll('.sample-image-trigger[data-sample-images-url]'), function (button) {
-      button.dataset.sampleImagesUrl = sampleJsonUrl(button.dataset.sampleImagesUrl || '');
-      if (!button.dataset.sampleImagesTitle) button.dataset.sampleImagesTitle = cardTitle(button);
-    });
-  }
-
   function buildModal() {
     if (modal) return;
     modal = document.createElement('div');
@@ -77,6 +50,10 @@
     statusNode = modal.querySelector('.sample-image-modal__status');
     previousButton = modal.querySelector('.sample-image-modal__arrow--prev');
     nextButton = modal.querySelector('.sample-image-modal__arrow--next');
+
+    mainImage.addEventListener('error', function () {
+      statusNode.textContent = '画像を表示できませんでした。別の画像を選択してください。';
+    });
 
     modal.addEventListener('click', function (event) {
       if (event.target.closest('[data-sample-image-close="1"]')) closeModal();
@@ -140,6 +117,10 @@
     })
       .then(function (response) {
         if (!response.ok) throw new Error('sample image request failed');
+        var contentType = response.headers.get('content-type') || '';
+        if (contentType.toLowerCase().indexOf('application/json') === -1) {
+          throw new Error('sample image response was not JSON');
+        }
         return response.json();
       })
       .then(function (payload) {
@@ -169,14 +150,14 @@
     if (returnFocus) returnFocus.focus();
   }
 
-  upgradeLegacyButtons(document);
-
   document.addEventListener('click', function (event) {
-    var trigger = event.target.closest('.sample-image-trigger');
+    var target = event.target;
+    var trigger = target && target.closest ? target.closest('.sample-image-trigger') : null;
     if (!trigger || trigger.disabled || !trigger.dataset.sampleImagesUrl) return;
     event.preventDefault();
+    event.stopPropagation();
     openModal(trigger);
-  });
+  }, true);
 
   document.addEventListener('keydown', function (event) {
     if (!modal || !modal.classList.contains('is-open')) return;
