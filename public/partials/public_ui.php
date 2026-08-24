@@ -708,7 +708,7 @@ if (!function_exists('pcf_render_item_card')) {
         }
         $affiliateUrl = trim((string)($item['affiliate_url'] ?? $item['url'] ?? ''));
         $sampleFallbackUrl = $affiliateUrl !== '' ? public_url('out.php') . '?' . http_build_query(['to' => $affiliateUrl]) : '';
-        $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode($contentId));
+        $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode($contentId) . '&format=json');
         $hasSampleImages = pcf_pick_sample_image_urls_from_raw($raw) !== [];
         if (!$hasSampleImages) {
             foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
