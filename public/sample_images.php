@@ -86,18 +86,29 @@ function sample_images_collect_from_value(mixed $value, array &$images): void
     }
 }
 
+$wantsJson = strtolower(trim((string)get('format', ''))) === 'json';
+$jsonError = static function (int $status, string $message) use ($wantsJson): never {
+    http_response_code($status);
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('X-Robots-Tag: noindex, nofollow');
+        echo json_encode(['title' => '', 'images' => [], 'error' => $message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    exit(e($message));
+};
+
 $contentId = trim((string)get('content_id', ''));
 if ($contentId === '') {
-    http_response_code(404);
-    exit('content_id が指定されていません。');
+    $jsonError(404, 'content_id が指定されていません。');
 }
 
 $stmt = db()->prepare('SELECT content_id, title, raw_json, image_list FROM items WHERE content_id = ? LIMIT 1');
 $stmt->execute([$contentId]);
 $item = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$item) {
-    http_response_code(404);
-    exit('指定の商品が見つかりません。');
+    $jsonError(404, '指定の商品が見つかりません。');
 }
 
 $decoded = json_decode((string)($item['raw_json'] ?? ''), true);
@@ -116,22 +127,40 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
         sample_images_collect_from_value($decoded['sampleImageURL'], $images);
     }
 }
-$images = array_values(array_unique($images));
+$images = array_values(array_unique(array_filter($images, static fn(string $url): bool => preg_match('#^https?://#i', $url) === 1)));
 if ($images === []) {
+    // DUGAの image_list は商品パッケージ画像ではなく、APIのダイジェスト画像として保存される既存データを利用する。
     foreach (sample_images_parse_list((string)($item['image_list'] ?? '')) as $image) {
         $url = trim((string)$image);
         if ($url !== '' && !sample_images_is_self_hosted_duga_image_url($url)) {
-            $images[] = sample_images_large_duga_digest_url($url);
+            $url = sample_images_large_duga_digest_url($url);
+            if (preg_match('#^https?://#i', $url) === 1) {
+                $images[] = $url;
+            }
         }
     }
     $images = array_values(array_unique($images));
 }
+
+if ($wantsJson) {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: public, max-age=300');
+    header('X-Robots-Tag: noindex, nofollow');
+    echo json_encode([
+        'title' => (string)($item['title'] ?? ''),
+        'images' => $images,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+header('X-Robots-Tag: noindex, nofollow');
 ?>
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title><?= e((string)$item['title']) ?> - サンプル画像</title>
   <style>
     html, body { height: 100%; }
