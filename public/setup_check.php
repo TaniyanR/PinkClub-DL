@@ -7,6 +7,11 @@ require_once __DIR__ . '/../lib/local_config_writer.php';
 
 $dbConfigError = null;
 $dbConfigNotice = null;
+$setupInitialPassword = null;
+if (isset($_SESSION['setup_initial_password_once']) && is_string($_SESSION['setup_initial_password_once'])) {
+    $setupInitialPassword = $_SESSION['setup_initial_password_once'];
+    unset($_SESSION['setup_initial_password_once']);
+}
 
 function setup_normalize_local_db(array $db): array
 {
@@ -111,11 +116,18 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
     try {
         $setupResult = installer_run();
         if (($setupResult['success'] ?? false) === true) {
-            app_redirect(LOGIN_PATH);
+            $generated = $setupResult['initial_password'] ?? null;
+            if (is_string($generated) && $generated !== '') {
+                $setupInitialPassword = $generated;
+                $dbConfigNotice = 'セットアップが完了しました。下記の初期認証情報を控えてください。';
+            } else {
+                app_redirect(LOGIN_PATH);
+            }
+        } else {
+            $dbConfigError = (string)($setupResult['error'] ?? 'セットアップに失敗しました。サーバーのエラーログを確認してください。');
         }
-        $dbConfigError = (string)($setupResult['error'] ?? 'セットアップに失敗しました。install.log を確認してください。');
-    } catch (Throwable $exception) {
-        $dbConfigError = 'セットアップに失敗しました。MySQL情報と logs/install.log を確認してください。';
+    } catch (Throwable) {
+        $dbConfigError = 'セットアップに失敗しました。MySQL情報とサーバー設定を確認してください。';
     }
 }
 
@@ -165,7 +177,7 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
             if ($dbConfigError === null) {
                 $dbConfigError = str_starts_with($exception->getMessage(), 'DB')
                     ? $exception->getMessage()
-                    : 'DB接続設定の保存に失敗しました: ' . $exception->getMessage();
+                    : 'DB接続設定の保存に失敗しました。入力内容を確認してください。';
             }
         }
     }
@@ -176,7 +188,7 @@ $currentDbConfig = $localConfigStatus['loaded'] && is_array($localConfigStatus['
     ? array_replace(app_config()['db'] ?? [], array_intersect_key($localConfigStatus['db'], app_config()['db'] ?? []))
     : (app_config()['db'] ?? []);
 if (($localConfigStatus['error'] ?? null) !== null) {
-    $dbConfigError = 'config.local.php の読み込みに失敗しました: ' . (string)$localConfigStatus['error'];
+    $dbConfigError = '設定ファイルを読み込めません。ファイル権限を確認してください。';
 }
 
 if (!$csrfFailed && $dbConfigError !== null && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -190,7 +202,7 @@ if (!$csrfFailed && $dbConfigError !== null && $_SERVER['REQUEST_METHOD'] === 'P
 $configErrors = db_validate_config($currentDbConfig, true);
 if ($configErrors === []) {
     $status = installer_status();
-    if (($status['completed'] ?? false) === true) {
+    if (($status['completed'] ?? false) === true && $setupInitialPassword === null) {
         app_redirect(LOGIN_PATH);
     }
 } else {
@@ -203,12 +215,11 @@ $checks = [
     '対象DB接続' => $status['db_connection'] ?? false,
     'admins テーブル' => $status['admins_table'] ?? false,
     'settings テーブル' => $status['settings_table'] ?? false,
-    '初期管理者 admin' => $status['admin_user'] ?? false,
+    '管理者アカウント' => $status['admin_user'] ?? false,
     'settings(installer.ready=1)' => $status['settings_row'] ?? false,
 ];
 
 $errorSummary = installer_last_error_summary();
-$logTail = installer_log_tail(30);
 csrf_token();
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
 $faviconUrl = $faviconPath !== '' ? public_url($faviconPath) : '';
@@ -219,6 +230,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title><?= e(APP_NAME) ?> セットアップ確認</title>
   <?php if ($faviconUrl !== ''): ?>
     <link rel="icon" href="<?= e($faviconUrl) ?>" sizes="any" type="<?= e($faviconType) ?>">
@@ -233,6 +245,15 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
       <h1><?= e(APP_NAME) ?> セットアップ確認</h1>
       <div class="alert alert-warning">セットアップ失敗時の診断ページです。DB設定保存後またはDBを空にした後は、この画面の「セットアップを実行する」から再実行できます。</div>
 
+      <?php if ($setupInitialPassword !== null): ?>
+        <div class="alert alert-warning" role="status">
+          <h2>セットアップ完了</h2>
+          <p>初期ログインID: <strong>admin</strong></p>
+          <p>初期パスワード: <strong><?= e($setupInitialPassword) ?></strong></p>
+          <p>このパスワードはこの画面で一度だけ表示されます。再読み込みすると表示されません。ログイン後、個人設定でログインID・再設定用メールアドレス・12文字以上の新しいパスワードを設定してください。</p>
+          <p><a href="<?= e(public_url('login0718.php')) ?>">管理画面へログインする</a></p>
+        </div>
+      <?php endif; ?>
 
       <h2>DB接続設定</h2>
       <div class="alert alert-warning">サーバーパネルに表示されるMySQL情報を入力してください。接続テストに成功した場合のみ保存します。</div>
@@ -255,8 +276,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         <p><button type="submit">DB設定を保存する</button></p>
       </form>
 
-
-      <?php if ($configErrors === []): ?>
+      <?php if ($configErrors === [] && $setupInitialPassword === null): ?>
         <h2>セットアップ実行</h2>
         <div class="alert alert-warning">DBを削除・空にした後は、このボタンで <code>sql/schema.sql</code> と <code>sql/migrations/*.sql</code> をファイル名順に自動適用します。</div>
         <form method="post">
@@ -275,25 +295,13 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         </tbody>
       </table>
 
-      <h2>直近エラー要約</h2>
       <?php if (is_array($errorSummary)): ?>
+        <h2>直近エラー要約</h2>
         <table><tbody>
           <tr><th>時刻</th><td><?= e((string)($errorSummary['time'] ?? '-')) ?></td></tr>
           <tr><th>ステップ</th><td><?= e((string)($errorSummary['step'] ?? '-')) ?></td></tr>
-          <tr><th>例外クラス</th><td><?= e((string)($errorSummary['class'] ?? '-')) ?></td></tr>
-          <tr><th>メッセージ</th><td><?= e((string)($errorSummary['message'] ?? '-')) ?></td></tr>
-          <tr><th>発生箇所</th><td><?= e((string)($errorSummary['file'] ?? '-')) ?>:<?= e((string)($errorSummary['line'] ?? '-')) ?></td></tr>
-          <tr><th>失敗SQL</th><td><pre><?= e((string)($errorSummary['failed_sql'] ?? '取得なし')) ?></pre></td></tr>
+          <tr><th>状態</th><td>セットアップ処理でエラーが記録されています。詳細は公開画面へ表示せず、サーバー管理者がログで確認してください。</td></tr>
         </tbody></table>
-      <?php else: ?>
-        <p>直近エラー要約はありません。</p>
-      <?php endif; ?>
-
-      <h2>install.log 末尾30行</h2>
-      <?php if (($logTail['error'] ?? null) !== null): ?>
-        <div class="alert alert-warning"><?= e((string)$logTail['error']) ?></div>
-      <?php else: ?>
-        <pre><?php foreach (($logTail['lines'] ?? []) as $line): ?><?= e((string)$line) . "\n" ?><?php endforeach; ?></pre>
       <?php endif; ?>
 
       <p><a href="<?= e(public_url('login0718.php')) ?>">ログイン画面へ戻る</a></p>
