@@ -86,6 +86,16 @@ function sample_images_collect_from_value(mixed $value, array &$images): void
     }
 }
 
+function sample_images_decode_raw_json(string $value): array
+{
+    $decoded = json_decode($value, true);
+    if (is_string($decoded)) {
+        $decoded = json_decode($decoded, true);
+    }
+
+    return is_array($decoded) ? $decoded : [];
+}
+
 $wantsJson = strtolower(trim((string)get('format', ''))) === 'json';
 $jsonError = static function (int $status, string $message) use ($wantsJson): never {
     http_response_code($status);
@@ -100,8 +110,8 @@ $jsonError = static function (int $status, string $message) use ($wantsJson): ne
 };
 
 $contentId = trim((string)get('content_id', ''));
-if ($contentId === '') {
-    $jsonError(404, 'content_id が指定されていません。');
+if (preg_match('/\A[a-z0-9][a-z0-9_-]{0,99}\z/i', $contentId) !== 1) {
+    $jsonError(400, 'content_id が正しくありません。');
 }
 
 $stmt = db()->prepare('SELECT content_id, title, raw_json, image_list FROM items WHERE content_id = ? LIMIT 1');
@@ -111,7 +121,7 @@ if (!$item) {
     $jsonError(404, '指定の商品が見つかりません。');
 }
 
-$decoded = json_decode((string)($item['raw_json'] ?? ''), true);
+$decoded = sample_images_decode_raw_json((string)($item['raw_json'] ?? ''));
 $images = [];
 if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     if (is_array($decoded['sampleImageURL'])) {
