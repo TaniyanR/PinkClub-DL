@@ -12,6 +12,7 @@
   var activeIndex = 0;
   var returnFocus = null;
   var savedScrollY = 0;
+  var initialized = false;
 
   function sampleJsonUrl(url) {
     try {
@@ -150,14 +151,41 @@
     if (returnFocus) returnFocus.focus();
   }
 
-  document.addEventListener('click', function (event) {
+  function triggerFromEvent(event) {
     var target = event.target;
-    var trigger = target && target.closest ? target.closest('.sample-image-trigger') : null;
+    return target && target.closest ? target.closest('.sample-image-trigger') : null;
+  }
+
+  function handleTriggerClick(event) {
+    var trigger = triggerFromEvent(event);
     if (!trigger || trigger.disabled || !trigger.dataset.sampleImagesUrl) return;
     event.preventDefault();
     event.stopPropagation();
     openModal(trigger);
-  }, true);
+  }
+
+  function initializeTriggers() {
+    if (initialized) return;
+    initialized = true;
+
+    Array.prototype.forEach.call(document.querySelectorAll('.sample-image-trigger[data-sample-images-url]'), function (trigger) {
+      trigger.addEventListener('click', handleTriggerClick);
+      trigger.setAttribute('data-sample-image-modal-ready', 'true');
+    });
+
+    // Dynamically inserted cards are handled here; existing cards use their direct listener above.
+    document.addEventListener('click', function (event) {
+      var trigger = triggerFromEvent(event);
+      if (!trigger || trigger.getAttribute('data-sample-image-modal-ready') === 'true') return;
+      handleTriggerClick(event);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeTriggers);
+  } else {
+    initializeTriggers();
+  }
 
   document.addEventListener('keydown', function (event) {
     if (!modal || !modal.classList.contains('is-open')) return;
