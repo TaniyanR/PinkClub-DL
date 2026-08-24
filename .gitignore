@@ -5,6 +5,18 @@
 .DS_Store
 Thumbs.db
 vendor/
+node_modules/
+.env
+.env.*
+!.env.example
+*.bak
+*.old
+*.orig
+*.tmp
+*.log
+/.idea/
+/.vscode/
+/storage/cache/
 
 !public/assets/vendor/
 !public/assets/vendor/**

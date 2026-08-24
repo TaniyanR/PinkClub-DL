@@ -5,6 +5,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/local_config_writer.php';
 require_once __DIR__ . '/site_settings.php';
+require_once __DIR__ . '/http_url.php';
 
 function app_session_start(): void
 {
@@ -119,13 +120,12 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
         return ['ok' => false, 'message' => 'source not found'];
     }
 
-    $ctx = stream_context_create(['http' => ['timeout' => $timeoutSec, 'user_agent' => 'PinkClubRSS/1.0']]);
-    $xmlRaw = @file_get_contents((string)$source['feed_url'], false, $ctx);
+    $xmlRaw = http_fetch_public((string)$source['feed_url'], $timeoutSec);
     if (!is_string($xmlRaw) || $xmlRaw === '') {
         return ['ok' => false, 'message' => 'fetch failed'];
     }
     libxml_use_internal_errors(true);
-    $xml = simplexml_load_string($xmlRaw);
+    $xml = simplexml_load_string($xmlRaw, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
     if ($xml === false) {
         return ['ok' => false, 'message' => 'xml parse failed'];
     }

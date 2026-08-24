@@ -37,6 +37,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             || !in_array($urlScheme, ['http', 'https'], true)
             || !filter_var($rss, FILTER_VALIDATE_URL)
             || !in_array($rssScheme, ['http', 'https'], true)
+            || !http_url_is_public($rss)
             || !filter_var($email, FILTER_VALIDATE_EMAIL)
         ) {
             $err = '入力内容を確認してください。';

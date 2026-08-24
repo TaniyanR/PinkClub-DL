@@ -30,6 +30,11 @@ ExpiresByType image/x-icon "access plus 1 year"
 ExpiresByType font/woff2 "access plus 1 year"
 </IfModule>
 <IfModule mod_headers.c>
+Header always unset X-Powered-By
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 <FilesMatch "\.(?:css|js|jpe?g|png|gif|webp|svg|ico|woff2)$">
 Header set Cache-Control "public, max-age=31536000, immutable"
 </FilesMatch>
