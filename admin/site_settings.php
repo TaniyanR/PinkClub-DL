@@ -7,6 +7,8 @@ auth_require_admin();
 $title = 'サイト設定';
 $message = null;
 $error = null;
+$recommendedTagline = 'DUGAの新作・人気アダルト動画を、女優・ジャンル・メーカー・シリーズ別に探せる作品情報サイトです。サンプル動画・画像から好みの作品を見つけられます。';
+$recommendedKeywords = 'DUGA,アダルト動画,AV女優,新作AV,人気AV,サンプル動画,サンプル画像,ジャンル,メーカー,シリーズ,VR動画';
 
 $uploadDir = __DIR__ . '/../public/uploads/site_settings';
 if (!is_dir($uploadDir)) {
@@ -111,6 +113,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $logoPath = trim(site_setting_get('site.logo_path', ''));
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
+$taglineValue = trim(site_setting_get('site.tagline', ''));
+$keywordsValue = trim(site_setting_get('site.keywords', ''));
+if ($taglineValue === '') {
+    $taglineValue = $recommendedTagline;
+}
+if ($keywordsValue === '') {
+    $keywordsValue = $recommendedKeywords;
+}
 
 require __DIR__ . '/includes/header.php';
 ?>
@@ -142,10 +152,10 @@ require __DIR__ . '/includes/header.php';
       <input type="url" value="<?= e(public_url('sitemap.php')) ?>" readonly>
     </label>
     <label>キャッチフレーズ（検索結果説明用）
-      <input type="text" name="site_tagline" value="<?= e(site_setting_get('site.tagline', '')) ?>">
+      <input type="text" name="site_tagline" value="<?= e($taglineValue) ?>">
     </label>
     <label>キーワード（meta keywords）
-      <input type="text" name="site_keywords" value="<?= e(site_setting_get('site.keywords', '')) ?>" placeholder="例: DUGA,動画,アフィリエイト">
+      <input type="text" name="site_keywords" value="<?= e($keywordsValue) ?>">
     </label>
 
     <label>タイトルロゴ（横250〜400px / 高さ50〜100px）

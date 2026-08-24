@@ -20,6 +20,10 @@ if (auth_user()) {
 
 $error = null;
 $setupMessage = null;
+$resetSuccess = isset($_SESSION['forgot_password_success']) && is_string($_SESSION['forgot_password_success'])
+    ? $_SESSION['forgot_password_success']
+    : null;
+unset($_SESSION['forgot_password_success']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify(post('_csrf'))) {
@@ -80,10 +84,14 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         <div class="alert alert-error" role="alert"><?= e($error) ?></div>
       <?php endif; ?>
 
+      <?php if ($resetSuccess !== null): ?>
+        <div class="alert alert-success" role="status"><?= e($resetSuccess) ?></div>
+      <?php endif; ?>
+
       <form method="post" class="login-form">
         <?= csrf_input() ?>
         <label class="login-label">
-          ユーザー名
+          ログインID
           <input class="login-input" name="username" autocomplete="username" required>
         </label>
         <label class="login-label">

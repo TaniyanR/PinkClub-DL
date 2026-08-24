@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
 
+header('X-Robots-Tag: noindex, nofollow', true);
+
 $itemId = max(0, (int)($_GET['id'] ?? 0));
 if ($itemId <= 0) {
     http_response_code(404);

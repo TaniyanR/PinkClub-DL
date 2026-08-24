@@ -79,8 +79,6 @@ function pcf_crawler_guard_check(): void
         rate_limit_check('public_rank_period_' . basename($path), 20, 60);
     }
 
-    $userAgent = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-    if (pcf_crawler_guard_is_known_crawler($userAgent)) {
-        rate_limit_check('public_crawler_' . basename($path), 10, 60);
-    }
+    // Search engines can legitimately fetch many detail URLs from one IP.
+    // Returning 429 here makes healthy pages appear as crawl errors.
 }

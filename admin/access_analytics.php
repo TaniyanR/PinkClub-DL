@@ -163,7 +163,13 @@ require __DIR__ . '/includes/header.php';
       <p><?= e((string)$logRetentionDays) ?>日</p>
       <small>最終整理: <?= e($lastLogCleanupAt !== '' ? $lastLogCleanupAt : '未実行') ?> / 前回削除: <?= e((string)$lastLogCleanupRows) ?>件</small>
     </article>
+    <article class="admin-card admin-status-card">
+      <strong>不正・重複計測対策</strong>
+      <p>有効</p>
+      <small>管理者・Bot・外部POST・10秒以内の同一ページ連続送信を除外</small>
+    </article>
   </div>
+  <p class="flash success">改善版の計測ルールはデプロイ後の新しいアクセスから適用されます。過去に記録済みのPVは監査証跡を守るため自動削除しません。</p>
   <?php endif; ?>
   <?php if ($tab === 'graph'): ?>
   <div class="admin-status-grid">

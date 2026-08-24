@@ -112,7 +112,7 @@ function fetch_item_by_content_id(string $contentId): ?array
     $stmt = db()->prepare(
         'SELECT * FROM items
          WHERE content_id = :cid
-           AND ' . items_front_release_where() . '
+           AND ' . items_product_source_where() . '
          ORDER BY
            CASE
              WHEN title LIKE "%お問い合わせ%" OR title LIKE "%問合せ%" OR title = "Privacy Policy" OR title = "サイトについて" THEN 1
@@ -793,7 +793,7 @@ function fetch_related_items(string $contentId, int $limit = 12): array
                INNER JOIN item_genres ig2 ON ig2.duga_id = ig1.duga_id
                INNER JOIN items i2 ON i2.id = ig2.item_id
                WHERE i1.content_id = :cid AND i2.content_id <> :cid
-                 AND ' . items_front_release_where('i2') . '
+                 AND ' . items_product_source_where('i2') . '
                GROUP BY i2.id
                ORDER BY i2.release_date DESC, i2.id DESC
                LIMIT :limit'
@@ -803,7 +803,7 @@ function fetch_related_items(string $contentId, int $limit = 12): array
                INNER JOIN item_genres ig2 ON ig2.genre_id = ig1.genre_id
                INNER JOIN items i2 ON i2.content_id = ig2.content_id
                WHERE i1.content_id = :cid AND i2.content_id <> :cid
-                 AND ' . items_front_release_where('i2') . '
+                 AND ' . items_product_source_where('i2') . '
                GROUP BY i2.id
                ORDER BY i2.release_date DESC, i2.id DESC
                LIMIT :limit';
@@ -820,7 +820,7 @@ function fetch_related_items(string $contentId, int $limit = 12): array
 
     try {
         $stmt = db()->prepare(
-            'SELECT * FROM items WHERE content_id <> :cid AND ' . items_front_release_where() . ' ORDER BY release_date DESC, id DESC LIMIT :limit'
+            'SELECT * FROM items WHERE content_id <> :cid AND ' . items_product_source_where() . ' ORDER BY release_date DESC, id DESC LIMIT :limit'
         );
         $stmt->bindValue(':cid', $cid, PDO::PARAM_STR);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);

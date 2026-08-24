@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_helpers.php';
+$isMobileRequest = function_exists('pcf_public_request_is_mobile') && pcf_public_request_is_mobile();
 
 $safeTextSetting = static function (string $key, string $default = ''): string {
     if (function_exists('front_safe_text_setting')) {
@@ -63,7 +64,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 ?>
   <?php $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home'; ?>
   </div>
-  <?php if (site_setting_get('link.rss_display.pc_text_bottom', '1') === '1'): ?>
+  <?php if (!$isMobileRequest && site_setting_get('link.rss_display.pc_text_bottom', '1') === '1'): ?>
   <div class="site-main__rss only-pc">
     <?php render_shared_content_ad_row('content_bottom', $pageType); ?>
   </div>
@@ -81,7 +82,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 <?php endif; ?>
 <footer class="site-footer">
   <div class="site-footer__credit">
-    <a href="https://click.duga.jp/aff/api/43846-01" target="_blank" rel="noopener noreferrer"><img src="https://ad.duga.jp/img/webservice_142.gif" alt="DUGAウェブサービス" width="142" height="18" border="0"></a>
+    <a href="https://click.duga.jp/aff/api/43846-01" target="_blank" rel="noopener noreferrer sponsored nofollow"><img src="https://ad.duga.jp/img/webservice_142.gif" alt="DUGAウェブサービス" width="142" height="18"></a>
   </div>
   <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
 </footer>

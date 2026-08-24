@@ -13,9 +13,13 @@ function collect_unique_items_for_page(callable $fetcher, int $limit, int $offse
     $targetCount = $offset + $limit + 1;
     $chunkSize = max($limit + 1, 25);
     $cursor = 0;
-    $maxLoops = 30;
+    $maxLoops = 8;
+    $deadline = microtime(true) + 2.5;
 
     for ($i = 0; $i < $maxLoops; $i++) {
+        if (microtime(true) >= $deadline) {
+            break;
+        }
         $chunk = $fetcher($chunkSize, $cursor);
         if (!is_array($chunk) || $chunk === []) {
             break;
@@ -103,16 +107,16 @@ include __DIR__ . '/partials/header.php';
                 <div class="product-grid product-grid--4">
                     <?php foreach ($items as $item) : ?>
                         <article class="product-card">
-                            <a class="product-card__media" href="/item.php?cid=<?php echo urlencode((string)$item['content_id']); ?>">
+                            <a class="product-card__media" href="<?php echo e(public_url('item.php?id=' . (int)$item['id'])); ?>">
                                 <img src="<?php echo e((string)($item['image_small'] ?: $item['image_large'])); ?>" alt="<?php echo e((string)$item['title']); ?>">
                             </a>
                             <div class="product-card__body">
-                                <a class="product-card__title" href="/item.php?cid=<?php echo urlencode((string)$item['content_id']); ?>"><?php echo e((string)$item['title']); ?></a>
+                                <a class="product-card__title" href="<?php echo e(public_url('item.php?id=' . (int)$item['id'])); ?>"><?php echo e((string)$item['title']); ?></a>
                                 <small><?php echo e(format_date($item['date_published'] ?? null)); ?> / <?php echo e(format_price($item['price_min'] ?? null)); ?></small>
                                 <div class="product-card__actions">
-                                    <a class="button" href="/item.php?cid=<?php echo urlencode((string)$item['content_id']); ?>">詳細</a>
+                                    <a class="button" href="<?php echo e(public_url('item.php?id=' . (int)$item['id'])); ?>">詳細</a>
                                     <?php if (!empty($item['affiliate_url'])) : ?>
-                                        <a class="button button--primary" href="<?php echo e((string)$item['affiliate_url']); ?>" target="_blank" rel="noopener noreferrer">購入</a>
+                                        <a class="button button--primary" href="<?php echo e((string)$item['affiliate_url']); ?>" target="_blank" rel="noopener noreferrer sponsored nofollow">購入</a>
                                     <?php endif; ?>
                                 </div>
                             </div>

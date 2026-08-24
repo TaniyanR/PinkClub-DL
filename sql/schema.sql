@@ -353,7 +353,8 @@ CREATE TABLE IF NOT EXISTS site_events (
   session_id_hash CHAR(64) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_site_events_type_date (event_type, created_at),
-  INDEX idx_site_events_session_date (session_id_hash, created_at)
+  INDEX idx_site_events_session_date (session_id_hash, created_at),
+  INDEX idx_site_events_pv_dedupe (event_type, session_id_hash, ip_hash, path(160), created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS daily_kpi (

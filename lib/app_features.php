@@ -313,7 +313,7 @@ function rss_refresh_stale_sources(int $maxSources = 1, int $staleAfterSec = 900
 function rss_widget_bootstrap(bool $syncSources = true): void
 {
     static $bootstrapped = false;
-    if ($bootstrapped) {
+    if (!$syncSources || $bootstrapped) {
         return;
     }
     $bootstrapped = true;
@@ -368,6 +368,7 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
     }
 
     $days = max(1, $days);
+    $scanLimit = max($limit, min(2000, $limit * 10));
     $pdo = db();
     $rows = [];
 
@@ -375,22 +376,24 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
         . 'FROM rss_items ri '
         . 'INNER JOIN rss_sources rs ON rs.id = ri.source_id '
         . 'WHERE rs.is_enabled = 1 AND rs.source_type = "partner_link" AND ri.published_at >= DATE_SUB(NOW(), INTERVAL :days DAY) '
-        . 'ORDER BY ri.published_at DESC, ri.id DESC';
+        . 'ORDER BY ri.published_at DESC, ri.id DESC LIMIT :scan_limit';
 
     $sqlWithoutImage = 'SELECT ri.source_id, rs.name AS source_name, ri.title, ri.url, ri.guid, ri.published_at '
         . 'FROM rss_items ri '
         . 'INNER JOIN rss_sources rs ON rs.id = ri.source_id '
         . 'WHERE rs.is_enabled = 1 AND rs.source_type = "partner_link" AND ri.published_at >= DATE_SUB(NOW(), INTERVAL :days DAY) '
-        . 'ORDER BY ri.published_at DESC, ri.id DESC';
+        . 'ORDER BY ri.published_at DESC, ri.id DESC LIMIT :scan_limit';
 
     try {
         $stmt = $pdo->prepare($sqlWithImage);
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+        $stmt->bindValue(':scan_limit', $scanLimit, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         $stmt = $pdo->prepare($sqlWithoutImage);
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+        $stmt->bindValue(':scan_limit', $scanLimit, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }

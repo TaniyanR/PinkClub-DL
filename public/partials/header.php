@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_helpers.php';
 
 $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home';
+$isMobileRequest = function_exists('pcf_public_request_is_mobile') && pcf_public_request_is_mobile();
 $safeTextSetting = static function (string $key, string $default = ''): string {
     if (function_exists('front_safe_text_setting')) {
         return front_safe_text_setting($key, $default);
@@ -26,6 +27,18 @@ $safeTextSetting = static function (string $key, string $default = ''): string {
 
     return $default;
 };
+$conformEmbeddedHtml = static function (string $html): string {
+    $html = preg_replace('/\s+type\s*=\s*(["\'])text\/javascript\1/i', '', $html) ?? $html;
+
+    return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
+        $tag = (string)($match[0] ?? '');
+        if ($tag === '' || preg_match('/\balt\s*=/i', $tag) === 1) {
+            return $tag;
+        }
+
+        return preg_replace('/\s*\/?>$/', ' alt="">', $tag) ?? $tag;
+    }, $html) ?? $html;
+};
 
 $siteName = trim($safeTextSetting('site_name', ''));
 if ($siteName === '') {
@@ -40,9 +53,9 @@ $keywords = trim($safeTextSetting('site.keywords', ''));
 $logoPath = trim($safeTextSetting('site.logo_path', ''));
 $faviconPath = trim($safeTextSetting('site.favicon_path', ''));
 
-$headerAdHtml = trim($safeTextSetting('header_ad_html', ''));
-$customHeadCode = trim($safeTextSetting('site.custom_head_code', ''));
-$customBodyOpenCode = trim($safeTextSetting('site.custom_body_open_code', ''));
+$headerAdHtml = $conformEmbeddedHtml(trim($safeTextSetting('header_ad_html', '')));
+$customHeadCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_head_code', '')));
+$customBodyOpenCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_body_open_code', '')));
 $titleText = (string)($title ?? $pageTitle ?? $siteName);
 $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
@@ -116,6 +129,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   <link rel="stylesheet" href="<?= e(asset_url('css/style.css')) ?>">
   <link rel="stylesheet" href="<?= e(asset_url('css/public-ui.css')) ?>">
   <script src="<?= e(asset_url('js/item-detail-fixes.js')) ?>" defer></script>
+  <script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     const vrPattern = /(?:【|\[|［)?\s*VR\s*(?:】|\]|］)?/i;
@@ -194,7 +208,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
         link.classList.add('sample-button--enabled');
         link.href = `<?= e(public_url('vr_affiliate.php')) ?>?id=${encodeURIComponent(itemId)}`;
         link.target = '_blank';
-        link.rel = 'noopener noreferrer sponsored';
+        link.rel = 'noopener noreferrer sponsored nofollow';
         link.textContent = '元サイトで見る';
         link.setAttribute('aria-label', `${title}をDUGAで見る`);
         link.style.display = 'flex';
@@ -265,9 +279,9 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
       <div class="site-disclaimer"><strong>当サイトはアフィリエイト広告を利用しています。</strong></div>
     </div>
     <div class="header-right site-header__right">
-      <?php if ($headerAdHtml !== '') : ?>
+      <?php if (!$isMobileRequest && $headerAdHtml !== '') : ?>
         <div class="site-ad"><?= $headerAdHtml ?></div>
-      <?php elseif ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
+      <?php elseif (!$isMobileRequest && $canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
         <div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div>
       <?php endif; ?>
     </div>
@@ -284,7 +298,9 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
 </div>
 <?php endif; ?>
 <div class="layout site-layout">
-  <?php require __DIR__ . '/sidebar.php'; ?>
+  <?php if (!$isMobileRequest): ?>
+    <?php require __DIR__ . '/sidebar.php'; ?>
+  <?php endif; ?>
   <main class="content site-main site-main--legacy">
     <?php $scriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')); ?>
     <?php $autoBreadcrumbSkip = ['item.php']; ?>

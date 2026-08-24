@@ -33,7 +33,7 @@ require __DIR__ . '/partials/header.php';
         <?php if (!empty($article['price'])): ?>
             <p>価格: <?php echo e((string) $article['price']); ?>円</p>
         <?php endif; ?>
-        <p><a href="<?php echo e($article['affiliate_url']); ?>" target="_blank" rel="noopener">DUGA商品ページへ</a></p>
+        <p><a href="<?php echo e($article['affiliate_url']); ?>" target="_blank" rel="noopener noreferrer sponsored nofollow">DUGA商品ページへ</a></p>
 </article>
 <?php
 require __DIR__ . '/partials/footer.php';

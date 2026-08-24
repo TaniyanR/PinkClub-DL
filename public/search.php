@@ -395,10 +395,14 @@ function search_fetch_items(string $query, int $limit, int $offset, string $exac
             $chunkSize = max($limit + 1, 25);
             $cursor = 0;
             $targetCount = $offset + $limit + 1;
-            $maxLoops = 30;
+            $maxLoops = 8;
+            $deadline = microtime(true) + 2.5;
             $collected = [];
 
             for ($i = 0; $i < $maxLoops; $i++) {
+                if (microtime(true) >= $deadline) {
+                    break;
+                }
                 $stmt = db()->prepare('SELECT * FROM items WHERE ' . $whereSql . ' ORDER BY ' . $orderSql . ' LIMIT :l OFFSET :o');
                 foreach ($params as $paramName => $paramValue) {
                     $stmt->bindValue($paramName, $paramValue, PDO::PARAM_STR);
@@ -450,6 +454,7 @@ $searchRows = search_fetch_items($searchQuery, $limit, $offset, $searchType);
 
 $title = '検索結果';
 $pageDescription = $searchQuery !== '' ? mb_strimwidth('「' . $searchQuery . '」の商品検索結果です。', 0, 150, '…', 'UTF-8') : 'キーワードを入力して商品を検索できます。';
+$robotsMeta = 'noindex,follow';
 $canonicalQuery = [];
 if ($searchQuery !== '') {
     $canonicalQuery['q'] = $searchQuery;

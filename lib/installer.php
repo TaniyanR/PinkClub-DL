@@ -240,8 +240,7 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
 
 function installer_ensure_admin_user(PDO $pdo, string $stepLabel): bool
 {
-    $stmt = $pdo->prepare('SELECT 1 FROM admins WHERE username = :username LIMIT 1');
-    $stmt->execute(['username' => 'admin']);
+    $stmt = $pdo->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1');
     if ($stmt->fetchColumn() !== false) { installer_log('step=' . $stepLabel . ' admin_exists=true'); return false; }
     $initialPassword = substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(18))), 0, 18);
     $insert = $pdo->prepare('INSERT INTO admins (username, password_hash) VALUES (:username, :password_hash)');
@@ -279,8 +278,7 @@ function installer_status(): array
     $status['admins_table'] = db_table_exists('admins');
     $status['settings_table'] = db_table_exists('settings');
     if ($status['admins_table']) {
-        $stmt = db()->prepare('SELECT 1 FROM admins WHERE username = :username LIMIT 1');
-        $stmt->execute(['username' => 'admin']);
+        $stmt = db()->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1');
         $status['admin_user'] = $stmt->fetchColumn() !== false;
     }
     if ($status['settings_table']) {

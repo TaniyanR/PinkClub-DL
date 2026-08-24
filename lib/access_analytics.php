@@ -18,10 +18,10 @@ function analytics_request_is_automated(?string $userAgent = null): bool
     if ($userAgent === '') {
         return true;
     }
-    if ((string)($_SERVER['HTTP_DNT'] ?? '') === '1' || (string)($_SERVER['HTTP_SEC_GPC'] ?? '') === '1') {
+    if (function_exists('pcf_crawler_guard_is_known_crawler') && pcf_crawler_guard_is_known_crawler($userAgent)) {
         return true;
     }
-    if (function_exists('pcf_crawler_guard_is_known_crawler') && pcf_crawler_guard_is_known_crawler($userAgent)) {
+    if (preg_match('/(?:bot\b|spider|crawler|headless|lighthouse|pagespeed|pingdom|uptime|monitoring|python-requests|python-urllib|curl\/|wget\/|httpclient|go-http-client|java\/|okhttp|libwww-perl|phantomjs|selenium|playwright|puppeteer)/i', $userAgent) === 1) {
         return true;
     }
 
@@ -35,19 +35,40 @@ function analytics_request_is_automated(?string $userAgent = null): bool
     return false;
 }
 
-function analytics_request_is_same_origin(): bool
+function analytics_request_is_valid_browser_beacon(): bool
 {
-    $site = strtolower(trim((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
-    if ($site !== '' && !in_array($site, ['same-origin', 'none'], true)) {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
         return false;
     }
-    $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
-    if ($origin === '') {
+    if (auth_user()) {
         return false;
     }
-    $originHost = analytics_normalize_host((string)(parse_url($origin, PHP_URL_HOST) ?: ''));
-    $requestHost = analytics_normalize_host((string)($_SERVER['HTTP_HOST'] ?? ''));
-    return $originHost !== '' && $requestHost !== '' && hash_equals($requestHost, $originHost);
+    if ((string)($_SERVER['HTTP_DNT'] ?? '') === '1'
+        || strtolower((string)($_SERVER['HTTP_SEC_GPC'] ?? '')) === '1'
+    ) {
+        return false;
+    }
+
+    $siteHost = analytics_normalize_host((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($siteHost === '') {
+        return false;
+    }
+
+    $fetchSite = strtolower(trim((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
+    if ($fetchSite !== '' && $fetchSite !== 'same-origin') {
+        return false;
+    }
+
+    $originHost = analytics_normalize_host((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+    $refererHost = analytics_normalize_host((string)($_SERVER['HTTP_REFERER'] ?? ''));
+    if ($originHost !== '') {
+        return hash_equals($siteHost, $originHost);
+    }
+    if ($refererHost !== '') {
+        return hash_equals($siteHost, $refererHost);
+    }
+
+    return $fetchSite === 'same-origin';
 }
 
 function analytics_normalize_host(string $host): string
@@ -136,13 +157,13 @@ function analytics_maybe_cleanup_old_logs(int $retentionDays = 730, int $batchSi
 
 function analytics_track_beacon(): void
 {
-    if (!analytics_ensure_tables()) {
+    if (!analytics_ensure_tables() || !analytics_request_is_valid_browser_beacon()) {
         return;
     }
 
     try {
     $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-    if (analytics_request_is_automated($ua) || !analytics_request_is_same_origin()) {
+    if (analytics_request_is_automated($ua)) {
         return;
     }
     $hash = analytics_visitor_hash($ua);
@@ -164,11 +185,24 @@ function analytics_track_beacon(): void
     $refCode = trim((string)($_POST['ref'] ?? ''));
 
     $pdo = db();
-    $duplicateStmt = $pdo->prepare("SELECT 1 FROM site_events WHERE event_type='pv' AND ip_hash=:ip AND path=:path AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND) LIMIT 1");
-    $duplicateStmt->execute([':ip' => $hash, ':path' => $pathForStats]);
+    $duplicateStmt = $pdo->prepare(
+        "SELECT 1 FROM site_events
+         WHERE event_type = 'pv'
+           AND session_id_hash = :marker
+           AND ip_hash = :visitor
+           AND path = :path
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
+         LIMIT 1"
+    );
+    $duplicateStmt->execute([
+        ':marker' => analytics_beacon_marker_hash(),
+        ':visitor' => $hash,
+        ':path' => $pathForStats,
+    ]);
     if ($duplicateStmt->fetchColumn() !== false) {
         return;
     }
+
     $visitStmt = $pdo->prepare('INSERT IGNORE INTO visit_sessions(stat_date,visitor_hash,first_seen_at) VALUES(:d,:h,NOW())');
     $visitStmt->execute([':d' => $today, ':h' => $hash]);
     $isUniqueVisitor = $visitStmt->rowCount() === 1;
@@ -186,6 +220,30 @@ function analytics_track_beacon(): void
     $externalReferrer = $host !== '' && $refererHost !== ''
         && analytics_normalize_host((string)$refererHost) !== $host;
     if ($refCode !== '' || $externalReferrer) {
+        $inSource = $refCode !== '' ? 'ref:' . mb_substr($refCode, 0, 64) : 'host:' . analytics_normalize_host((string)$refererHost);
+        $inDuplicateStmt = $pdo->prepare(
+            "SELECT 1 FROM site_events
+             WHERE event_type = 'in'
+               AND session_id_hash = :visitor
+               AND referrer = :source
+               AND created_at >= CURDATE()
+               AND created_at < CURDATE() + INTERVAL 1 DAY
+             LIMIT 1"
+        );
+        $inDuplicateStmt->execute([':visitor' => $hash, ':source' => $inSource]);
+        if ($inDuplicateStmt->fetchColumn() !== false) {
+            analytics_maybe_cleanup_old_logs(730, 2000);
+            return;
+        }
+        $pdo->prepare(
+            "INSERT INTO site_events(event_type,path,referrer,ua_hash,ip_hash,session_id_hash,created_at)
+             VALUES('in',:path,:source,NULL,:ip,:visitor,NOW())"
+        )->execute([
+            ':path' => mb_substr($path, 0, 255),
+            ':source' => $inSource,
+            ':ip' => $hash,
+            ':visitor' => $hash,
+        ]);
         $pdo->prepare('INSERT INTO in_logs(created_at,ref_code,referer_host,path) VALUES(NOW(),:ref,:host,:path)')->execute([
             ':ref' => $refCode,
             ':host' => mb_substr((string)$refererHost, 0, 255),
@@ -196,6 +254,8 @@ function analytics_track_beacon(): void
     } catch (Throwable $e) {
         analytics_disable_for_request($e);
     }
+
+    analytics_maybe_cleanup_old_logs(730, 2000);
 }
 
 function analytics_log_out(string $targetUrl, string $refCode, string $path): void
@@ -261,6 +321,51 @@ function analytics_log_out(string $targetUrl, string $refCode, string $path): vo
     } catch (Throwable $e) {
         analytics_disable_for_request($e);
     }
+}
+
+function analytics_log_taxonomy_page_view(string $path): void
+{
+    return;
+}
+
+function analytics_log_actress_page_view(int $actressId): void
+{
+    $actressId = max(0, $actressId);
+    if ($actressId <= 0) {
+        return;
+    }
+
+    analytics_log_taxonomy_page_view('/actress.php?id=' . $actressId);
+}
+
+function analytics_log_genre_page_view(int $genreId): void
+{
+    $genreId = max(0, $genreId);
+    if ($genreId <= 0) {
+        return;
+    }
+
+    analytics_log_taxonomy_page_view('/genre.php?id=' . $genreId);
+}
+
+function analytics_log_maker_page_view(int $makerId): void
+{
+    $makerId = max(0, $makerId);
+    if ($makerId <= 0) {
+        return;
+    }
+
+    analytics_log_taxonomy_page_view('/maker.php?id=' . $makerId);
+}
+
+function analytics_log_series_page_view(int $seriesId): void
+{
+    $seriesId = max(0, $seriesId);
+    if ($seriesId <= 0) {
+        return;
+    }
+
+    analytics_log_taxonomy_page_view('/series_detail.php?id=' . $seriesId);
 }
 
 function analytics_ensure_tables(): bool

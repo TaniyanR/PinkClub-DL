@@ -157,7 +157,7 @@ function item_tag_links_from_text(string $tagText): array
         if ($tagName === '') {
             continue;
         }
-        $links[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $tagName])) . '">' . e($tagName) . '</a>';
+        $links[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $tagName])) . '">' . e($tagName) . '</a>';
     }
 
     return $links;
@@ -258,7 +258,7 @@ if ($contentId === '' && $cid !== '') {
 $item = false;
 try {
     if ($id > 0) {
-        $stmt = db()->prepare('SELECT * FROM items WHERE id = ? AND ' . items_front_release_where());
+        $stmt = db()->prepare('SELECT * FROM items WHERE id = ? AND ' . items_product_source_where());
         $stmt->execute([$id]);
         $item = $stmt->fetch();
         if (is_array($item)) {
@@ -279,6 +279,12 @@ try {
 
 if (!$item) {
     require __DIR__ . '/404.php';
+}
+
+$canonicalItemId = (int)($item['id'] ?? 0);
+if ($canonicalItemId > 0 && ($id !== $canonicalItemId || $contentId !== '' || $cid !== '')) {
+    header('Location: ' . public_url('item.php') . '?id=' . rawurlencode((string)$canonicalItemId), true, 301);
+    exit;
 }
 
 $relatedItems = [];
@@ -523,7 +529,7 @@ foreach ($actresses as $actressRow) {
     if ($actressName === '') {
         continue;
     }
-    $performerLinks[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $actressName])) . '">' . e($actressName) . '</a>';
+    $performerLinks[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $actressName])) . '">' . e($actressName) . '</a>';
 }
 $genreLinks = [];
 foreach ($genres as $genreRow) {
@@ -531,7 +537,7 @@ foreach ($genres as $genreRow) {
     if ($genreName === '') {
         continue;
     }
-    $genreLinks[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $genreName])) . '">' . e($genreName) . '</a>';
+    $genreLinks[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $genreName])) . '">' . e($genreName) . '</a>';
 }
 $seriesLinks = [];
 foreach ($seriesList as $seriesRow) {
@@ -539,7 +545,7 @@ foreach ($seriesList as $seriesRow) {
     if ($seriesName === '') {
         continue;
     }
-    $seriesLinks[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $seriesName])) . '">' . e($seriesName) . '</a>';
+    $seriesLinks[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $seriesName])) . '">' . e($seriesName) . '</a>';
 }
 $makerLinks = [];
 foreach ($makers as $makerRow) {
@@ -547,7 +553,7 @@ foreach ($makers as $makerRow) {
     if ($makerName === '') {
         continue;
     }
-    $makerLinks[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $makerName])) . '">' . e($makerName) . '</a>';
+    $makerLinks[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $makerName])) . '">' . e($makerName) . '</a>';
 }
 $authorLinks = [];
 foreach ($authors as $authorRow) {
@@ -555,7 +561,7 @@ foreach ($authors as $authorRow) {
     if ($authorName === '') {
         continue;
     }
-    $authorLinks[] = '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $authorName])) . '">' . e($authorName) . '</a>';
+    $authorLinks[] = '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $authorName])) . '">' . e($authorName) . '</a>';
 }
 $tagText = item_pick_raw_text($raw, ['tag', 'tags']);
 if ($tagText === '') {
@@ -676,7 +682,7 @@ require __DIR__ . '/partials/header.php';
         <?php if ($sampleMovieIsVideo): ?>
         <video class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>"<?= $sampleMoviePoster !== '' ? ' poster="' . e($sampleMoviePoster) . '"' : '' ?> controls playsinline preload="metadata" width="720" height="480" style="display:block;width:100%;height:100%;background:#000;"></video>
         <?php else: ?>
-        <iframe class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>" allow="autoplay; fullscreen" referrerpolicy="no-referrer" scrolling="no" width="720" height="480"></iframe>
+        <iframe class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>" allow="autoplay; fullscreen" referrerpolicy="no-referrer" width="720" height="480"></iframe>
         <?php endif; ?>
       </div>
       <?php else: ?>
@@ -695,7 +701,7 @@ require __DIR__ . '/partials/header.php';
   <?php endif; ?>
 
   <?php if ($affiliateUrl !== ''): ?>
-    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer">購入ボタン</a></p>
+    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer sponsored nofollow">購入ボタン</a></p>
   <?php endif; ?>
 
   <section class="pcf-detail pcf-item-main">
@@ -716,11 +722,11 @@ require __DIR__ . '/partials/header.php';
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">商品発売日</th><td style="padding:4px 0; border:0;"><?= e($releaseDateDisplay !== '' ? $releaseDateDisplay : '―') ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">収録時間</th><td style="padding:4px 0; border:0;"><?= e($volumeDisplay !== '' ? $volumeDisplay : '―') ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">出演者</th><td style="padding:4px 0; border:0;"><?= $performerLinks !== [] ? implode('、', $performerLinks) : e($performerText !== '' ? $performerText : '―') ?></td></tr>
-          <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">監督</th><td style="padding:4px 0; border:0;"><?= $rawDirectorName !== '' ? '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $rawDirectorName])) . '">' . e($rawDirectorName) . '</a>' : '―' ?></td></tr>
+          <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">監督</th><td style="padding:4px 0; border:0;"><?= $rawDirectorName !== '' ? '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $rawDirectorName])) . '">' . e($rawDirectorName) . '</a>' : '―' ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">作者</th><td style="padding:4px 0; border:0;"><?= $authorLinks !== [] ? implode('、', $authorLinks) : '―' ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">シリーズ</th><td style="padding:4px 0; border:0;"><?= $seriesLinks !== [] ? implode('、', $seriesLinks) : e($rawSeriesName !== '' ? $rawSeriesName : '―') ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">メーカー</th><td style="padding:4px 0; border:0;"><?= $makerLinks !== [] ? implode('、', $makerLinks) : e($rawMakerName !== '' ? $rawMakerName : '―') ?></td></tr>
-          <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">レーベル</th><td style="padding:4px 0; border:0;"><?= $labelName !== '' ? '<a href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $labelName])) . '">' . e($labelName) . '</a>' : '―' ?></td></tr>
+          <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">レーベル</th><td style="padding:4px 0; border:0;"><?= $labelName !== '' ? '<a rel="nofollow" href="' . e(public_url('search.php') . '?' . http_build_query(['q' => $labelName])) . '">' . e($labelName) . '</a>' : '―' ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">ジャンル</th><td style="padding:4px 0; border:0;"><?= $genreLinks !== [] ? implode('、', $genreLinks) : e($genreText !== '' ? $genreText : '―') ?></td></tr>
           <tr><th style="text-align:left; font-weight:700; padding:4px 8px 4px 0; white-space:nowrap; border:0;">関連タグ</th><td style="padding:4px 0; border:0;"><?= $tagLinks !== [] ? implode(' ', $tagLinks) : e($tagText !== '' ? $tagText : '―') ?></td></tr>
         </tbody>
@@ -729,7 +735,7 @@ require __DIR__ . '/partials/header.php';
   </section>
 
   <?php if ($affiliateUrl !== ''): ?>
-    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer">購入ボタン</a></p>
+    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer sponsored nofollow">購入ボタン</a></p>
   <?php endif; ?>
 
   <h2 class="pcf-section-title">関連作品</h2>
@@ -760,7 +766,7 @@ require __DIR__ . '/partials/header.php';
       $tabUrl = public_url(basename(__FILE__)) . '?' . http_build_query($tabQuery) . '#access-ranking';
       ?>
       <?php $tabStyle = $accessRankingPeriod === $tabKey ? 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#0b5ed7; color:#fff; font-weight:700; text-decoration:none;' : 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#fff; color:#0b5ed7; font-weight:700; text-decoration:none;'; ?>
-      <a href="<?= e($tabUrl) ?>" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
+      <a href="<?= e($tabUrl) ?>" rel="nofollow" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
     <?php endforeach; ?>
   </div>
     <?php if ($accessRankingRows !== []): ?>
@@ -800,7 +806,7 @@ require __DIR__ . '/partials/header.php';
   <button type="button" data-image-close="1" style="position:absolute; top:12px; right:16px; color:#fff; background:transparent; border:0; font-size:40px; line-height:1; cursor:pointer;">×</button>
   <div style="max-width:1200px; margin:26px auto 0; padding:0 18px;">
     <div style="display:flex; align-items:center; justify-content:center; min-height:66vh;">
-      <img id="pcf-image-viewer-main" src="" alt="サンプル画像" style="max-width:100%; max-height:66vh; object-fit:contain;">
+      <img id="pcf-image-viewer-main" src="<?= e($packageImage) ?>" alt="サンプル画像" style="max-width:100%; max-height:66vh; object-fit:contain;">
     </div>
     <div id="pcf-image-viewer-thumbs" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:12px;"></div>
   </div>

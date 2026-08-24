@@ -11,14 +11,14 @@ function pcf_site_feed_xml(string $value): string
 
 function pcf_site_feed_item_url(array $item): string
 {
-    $contentId = trim((string)($item['content_id'] ?? ''));
-    if ($contentId !== '') {
-        return public_url('item.php?cid=' . rawurlencode($contentId));
-    }
-
     $id = (int)($item['id'] ?? 0);
     if ($id > 0) {
         return public_url('item.php?id=' . $id);
+    }
+
+    $contentId = trim((string)($item['content_id'] ?? ''));
+    if ($contentId !== '') {
+        return public_url('item.php?cid=' . rawurlencode($contentId));
     }
 
     return public_url('');

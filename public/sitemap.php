@@ -76,7 +76,7 @@ $staticUrls = [
     [public_url('items.php'), 'daily', '0.9'],
 ];
 $tables = [
-    ['items', 'item.php', 'weekly', '0.8', items_front_release_where()],
+    ['items', 'item.php', 'weekly', '0.8', items_product_source_where()],
 ];
 $totalUrls = count($staticUrls);
 foreach ($tables as $table) {
