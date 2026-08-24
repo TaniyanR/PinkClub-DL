@@ -81,10 +81,11 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 <?php endif; ?>
 <footer class="site-footer">
   <div class="site-footer__credit">
-    <a href="https://click.duga.jp/aff/api/43846-01" target="_blank" rel="noopener noreferrer"><img src="https://ad.duga.jp/img/webservice_142.gif" alt="DUGAウェブサービス" width="142" height="18" border="0"></a>
+    <a href="https://click.duga.jp/aff/api/43846-01" target="_blank" rel="noopener noreferrer"><img src="https://ad.duga.jp/img/webservice_142.gif" alt="DUGAウェブサービス" width="142" height="18"></a>
   </div>
   <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
 </footer>
+<script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" data-sample-image-modal-css="<?= e(asset_url('css/sample-image-modal.css')) ?>" defer></script>
 <script>
 (function () {
   var header = document.querySelector('.site-header');

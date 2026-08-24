@@ -1,11 +1,39 @@
 ErrorDocument 404 /404.php
 RewriteEngine On
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L,NE]
 RewriteCond %{HTTPS} !=on
-RewriteRule ^(?:index\.(?:php|com))?$ https://%{HTTP_HOST}/ [R=301,L]
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
 RewriteRule ^index\.(?:php|com)$ / [R=301,L]
+RewriteRule ^robots\.txt$ public/robots.php [L]
+RewriteCond %{THE_REQUEST} \s/+public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php(?:[?\s]) [NC]
+RewriteRule ^public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php$ /$1.php [R=301,L,NE]
+RewriteCond %{THE_REQUEST} \s/+(?:public/)?series_one\.php(?:[?\s]) [NC]
+RewriteRule ^(?:public/)?series_one\.php$ /series_detail.php [R=301,L,NE]
 RewriteRule ^(config(?:\.local)?\.php|cache|logs|config|lib|sql)(/|$) - [F,L]
 RewriteRule ^public/ - [L]
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 RewriteRule ^(.*)$ public/$1 [L]
+
+<IfModule mod_expires.c>
+ExpiresActive On
+ExpiresByType text/css "access plus 1 year"
+ExpiresByType application/javascript "access plus 1 year"
+ExpiresByType image/jpeg "access plus 1 year"
+ExpiresByType image/png "access plus 1 year"
+ExpiresByType image/gif "access plus 1 year"
+ExpiresByType image/webp "access plus 1 year"
+ExpiresByType image/svg+xml "access plus 1 year"
+ExpiresByType image/x-icon "access plus 1 year"
+ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+<IfModule mod_headers.c>
+<FilesMatch "\.(?:css|js|jpe?g|png|gif|webp|svg|ico|woff2)$">
+Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+</IfModule>
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json application/xml image/svg+xml
+</IfModule>
