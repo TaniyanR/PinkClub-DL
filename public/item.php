@@ -412,6 +412,10 @@ $sampleImages = array_values(array_unique($sampleImages));
 $sampleImagesSmall = array_values(array_unique($sampleImagesSmall));
 $sampleImages = array_values(array_filter(array_slice($sampleImages, 0, 24), static fn($url) => !pcf_is_self_hosted_duga_image_url((string)$url)));
 $sampleImagesSmall = array_values(array_filter(array_slice($sampleImagesSmall, 0, 24), static fn($url) => !pcf_is_self_hosted_duga_image_url((string)$url)));
+$sampleImages = array_values(array_unique(array_map(
+    static fn($url) => pcf_large_duga_digest_image_url((string)$url),
+    $sampleImages
+)));
 $sampleImagesSmallLargeMap = [];
 $sampleImageCount = max(count($sampleImages), count($sampleImagesSmall));
 for ($i = 0; $i < $sampleImageCount; $i++) {
@@ -796,12 +800,15 @@ require __DIR__ . '/partials/header.php';
 
 </article>
 
-<div id="pcf-image-viewer-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1200;">
+<div id="pcf-image-viewer-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.94); z-index:1200; overflow:auto;">
   <button type="button" data-image-close="1" style="position:absolute; top:12px; right:16px; color:#fff; background:transparent; border:0; font-size:40px; line-height:1; cursor:pointer;">×</button>
-  <div style="max-width:1200px; margin:26px auto 0; padding:0 18px;">
-    <div style="display:flex; align-items:center; justify-content:center; min-height:66vh;">
-      <img id="pcf-image-viewer-main" src="" alt="サンプル画像" style="max-width:100%; max-height:66vh; object-fit:contain;">
+  <div style="width:min(1500px,100%); margin:18px auto 0; padding:0 clamp(16px,3vw,58px) 24px; box-sizing:border-box;">
+    <div style="display:flex; align-items:center; justify-content:center; min-height:78vh;">
+      <a id="pcf-image-viewer-original" href="#" target="_blank" rel="noopener noreferrer" title="大きい画像を開く" style="display:flex;align-items:center;justify-content:center;width:100%;height:78vh;">
+        <img id="pcf-image-viewer-main" src="" alt="サンプル画像" style="display:block;width:100%;height:100%;object-fit:contain;">
+      </a>
     </div>
+    <p style="margin:8px 0 0;text-align:center;"><a id="pcf-image-viewer-original-link" href="#" target="_blank" rel="noopener noreferrer" style="color:#fff;text-decoration:underline;font-weight:700;">大きい画像を開く</a></p>
     <div id="pcf-image-viewer-thumbs" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:12px;"></div>
   </div>
 </div>
@@ -832,11 +839,16 @@ require __DIR__ . '/partials/header.php';
   const imageViewer = document.getElementById('pcf-image-viewer-modal');
   const imageViewerMain = document.getElementById('pcf-image-viewer-main');
   const imageViewerThumbs = document.getElementById('pcf-image-viewer-thumbs');
+  const imageViewerOriginal = document.getElementById('pcf-image-viewer-original');
+  const imageViewerOriginalLink = document.getElementById('pcf-image-viewer-original-link');
   const imageList = <?= json_encode(array_map(static fn($pair) => ['small' => (string)($pair['small'] ?? ''), 'large' => (string)($pair['large'] ?? '')], $sampleImagesSmallLargeMap), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const showImage = (index) => {
     if (!imageViewerMain || !imageViewerThumbs || !Array.isArray(imageList) || imageList.length === 0) return;
     const idx = Math.max(0, Math.min(index, imageList.length - 1));
-    imageViewerMain.src = imageList[idx].large || imageList[idx].small || '';
+    const largeImageUrl = imageList[idx].large || imageList[idx].small || '';
+    imageViewerMain.src = largeImageUrl;
+    if (imageViewerOriginal) imageViewerOriginal.href = largeImageUrl;
+    if (imageViewerOriginalLink) imageViewerOriginalLink.href = largeImageUrl;
     imageViewerThumbs.innerHTML = '';
     imageList.forEach((item, i) => {
       const btn = document.createElement('button');
@@ -866,6 +878,8 @@ require __DIR__ . '/partials/header.php';
     if (!imageViewer || !imageViewerMain) return;
     imageViewer.style.display = 'none';
     imageViewerMain.src = '';
+    if (imageViewerOriginal) imageViewerOriginal.href = '#';
+    if (imageViewerOriginalLink) imageViewerOriginalLink.href = '#';
   };
 
   const packageImage = document.querySelector('[data-package-image="1"]');
@@ -905,6 +919,7 @@ require __DIR__ . '/partials/header.php';
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && modal && modal.classList.contains('is-open')) closeMovie();
+    if (event.key === 'Escape' && imageViewer && imageViewer.style.display !== 'none') closeImageViewer();
   });
 })();
 </script>

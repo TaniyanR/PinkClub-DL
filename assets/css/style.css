@@ -206,6 +206,19 @@ body:not(.admin-page):not(.login-page):not(.setup-page){
 .contact-form textarea{min-height:220px;resize:vertical}
 .contact-form button{justify-self:start;padding:8px 18px;border:1px solid #ff4da6;border-radius:4px;background:#ff4da6;color:#fff;font-weight:700;cursor:pointer}
 .contact-form button:hover,.contact-form button:focus-visible{background:#d63384;border-color:#d63384;outline:none}
+.contact-form-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 22px}
+.contact-form-tab{min-height:58px;padding:10px 14px;border:2px solid #aeb4bb;border-radius:10px;background:#f7f7f7;color:#333;font-weight:700;cursor:pointer}
+.contact-form-tab small{display:block;margin-top:3px;font-size:11px;font-weight:400;color:#666}
+.contact-form-tab.is-active{background:#555b61;color:#fff;border-color:#555b61;box-shadow:0 3px 10px rgba(0,0,0,.16)}
+.contact-form-tab.is-active small{color:#fff}
+.contact-form-tab:focus-visible{outline:3px solid rgba(85,91,97,.28);outline-offset:2px}
+.deletion-consent{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:8px;width:100%;margin:16px 0}
+.deletion-consent input[type="checkbox"]{width:auto;min-width:0;margin:5px 0 0}
+.deletion-consent label{display:block;margin:0;line-height:1.6}
+.contact-form-notice{padding:12px;border-radius:6px;font-weight:700}
+.contact-form-notice.is-success{border:1px solid #2d8a47;background:#eefbf1;color:#174f29}
+.contact-form-notice.is-error{border:1px solid #b52b2b;background:#fff0f0;color:#7e1d1d}
+@media(max-width:600px){.contact-form-tabs{grid-template-columns:1fr}.contact-form-tab{width:100%}}
 .page-top-button{position:fixed;right:18px;bottom:18px;z-index:1000;border:1px solid #ff4da6;border-radius:999px;background:#ff4da6;color:#fff;padding:10px 14px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.18);cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility .2s ease}
 .page-top-button.is-visible{opacity:1;visibility:visible;pointer-events:auto}
 .page-top-button:hover,.page-top-button:focus-visible{background:#d63384;border-color:#d63384;outline:none}

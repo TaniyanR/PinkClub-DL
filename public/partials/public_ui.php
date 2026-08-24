@@ -110,6 +110,23 @@ if (!function_exists('pcf_is_self_hosted_duga_image_url')) {
     }
 }
 
+if (!function_exists('pcf_large_duga_digest_image_url')) {
+    function pcf_large_duga_digest_image_url(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || strcasecmp((string)($parts['host'] ?? ''), 'pic.duga.jp') !== 0) {
+            return $url;
+        }
+
+        $path = (string)($parts['path'] ?? '');
+        if (preg_match('#^(/unsecure/[^/]+/[^/]+)/noauth/scap/([^/]+)$#i', $path, $matches) !== 1) {
+            return $url;
+        }
+
+        return 'https://pic.duga.jp' . $matches[1] . '/cap/' . $matches[2];
+    }
+}
+
 if (!function_exists('pcf_first_image_from_mixed')) {
     function pcf_first_image_from_mixed(mixed $value): string
     {
@@ -724,7 +741,7 @@ if (!function_exists('pcf_render_item_card')) {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル動画</span>';
         }
         if ($hasSampleImages && $contentId !== '') {
-            echo '<button type="button" class="pcf-dm-card__button" onclick="window.open(\'' . e($sampleImagesUrl) . '\',\'_blank\',\'noopener,noreferrer,width=760,height=540\');">サンプル画像</button>';
+            echo '<button type="button" class="pcf-dm-card__button sample-image-trigger" data-sample-images-url="' . e($sampleImagesUrl) . '" data-sample-images-title="' . e($title) . '">サンプル画像</button>';
         } else {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル画像</span>';
         }

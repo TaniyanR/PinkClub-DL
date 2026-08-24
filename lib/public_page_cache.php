@@ -28,6 +28,7 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         'search.php',
         'ranking_refresh.php',
         'link_apply.php',
+        'deletion_request_submit.php',
         'page.php',
     ];
 
