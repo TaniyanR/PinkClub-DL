@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/bootstrap.php';
 require_once __DIR__ . '/../lib/repository.php';
 
 header('Content-Type: application/xml; charset=UTF-8');
+header('X-Robots-Tag: noindex, follow');
 
 function sitemap_e(string $value): string
 {
@@ -42,16 +43,13 @@ function sitemap_table_count(string $table, string $where = ''): int
 function sitemap_emit_table(string $table, string $path, string $changefreq, string $priority, int $start, int &$remaining, string $where = ''): int
 {
     $count = sitemap_table_count($table, $where);
-    if ($remaining <= 0) {
-        return $count;
-    }
-    if ($start >= $count) {
+    if ($remaining <= 0 || $start >= $count) {
         return $count;
     }
 
     $limit = min($remaining, $count - $start);
     try {
-        $sql = 'SELECT id, updated_at FROM ' . $table;
+        $sql = 'SELECT id FROM ' . $table;
         if ($where !== '') {
             $sql .= ' WHERE ' . $where;
         }
@@ -60,8 +58,12 @@ function sitemap_emit_table(string $table, string $path, string $changefreq, str
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $start, PDO::PARAM_INT);
         $stmt->execute();
-        foreach ($stmt->fetchAll() ?: [] as $row) {
-            sitemap_url(public_url($path) . '?id=' . rawurlencode((string)(int)($row['id'] ?? 0)), $changefreq, $priority, (string)($row['updated_at'] ?? ''));
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            sitemap_url(public_url($path) . '?id=' . rawurlencode((string)$id), $changefreq, $priority);
             $remaining--;
         }
     } catch (Throwable) {
@@ -72,7 +74,7 @@ function sitemap_emit_table(string $table, string $path, string $changefreq, str
 
 $perSitemap = 10000;
 $staticUrls = [
-    [public_url('index.php'), 'daily', '1.0'],
+    [public_url(''), 'daily', '1.0'],
     [public_url('items.php'), 'daily', '0.9'],
 ];
 $tables = [
@@ -99,7 +101,6 @@ if ((isset($_GET['index']) && (string)$_GET['index'] === '1') || ($totalUrls > $
 $part = max(1, (int)($_GET['part'] ?? 1));
 $start = ($part - 1) * $perSitemap;
 $remaining = $perSitemap;
-
 
 echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 echo "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
