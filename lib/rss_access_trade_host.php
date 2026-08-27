@@ -97,8 +97,8 @@ function rss_trade_metrics_host_aware(array $items, int $days = 30): array
             $ref = trim((string)($row['ref_code'] ?? ''));
             if (isset($metrics[$ref])) $metrics[$ref]['out'] = (int)($row['c'] ?? 0);
         }
-    } catch (Throwable $e) {
-        error_log('[rss] host-aware access-trade metrics lookup failed: ' . $e->getMessage());
+    } catch (Throwable) {
+        error_log('[rss] host-aware access-trade metrics lookup failed');
     }
     return $metrics;
 }
