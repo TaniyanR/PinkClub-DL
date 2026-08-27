@@ -7,8 +7,10 @@ require_once __DIR__ . '/../lib/site_article_feeds.php';
 function pcf_site_feed_xml(string $value): string { return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8'); }
 function pcf_site_feed_item_url(array $item): string
 {
-    $contentId=trim((string)($item['content_id']??''));if($contentId!=='')return public_url('item.php?cid='.rawurlencode($contentId));
-    $id=(int)($item['id']??0);return $id>0?public_url('item.php?id='.$id):public_url('');
+    $id = (int)($item['id'] ?? 0);
+    if ($id > 0) return public_url('item.php?id=' . $id);
+    $contentId = trim((string)($item['content_id'] ?? ''));
+    return $contentId !== '' ? public_url('item.php?cid=' . rawurlencode($contentId)) : public_url('');
 }
 function pcf_site_feed_date(?string $value): string
 {
