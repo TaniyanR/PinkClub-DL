@@ -1,7 +1,182 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/rss_access_trade.php';
-function rss_trade_normalize_host(string $value): string{$value=trim(strtolower($value));if($value==='')return '';if(str_contains($value,'://'))$value=(string)(parse_url($value,PHP_URL_HOST)?:'');$value=preg_replace('/:\d+$/','',$value)??$value;$value=rtrim($value,'.');return preg_replace('/^www\./','',$value)??$value;}
-function rss_trade_item_key(array $item): string{$url=trim((string)($item['link']??''));if($url!==''){$p=parse_url($url);if(is_array($p)){$scheme=strtolower((string)($p['scheme']??''));$host=rss_trade_normalize_host((string)($p['host']??''));$path=(string)($p['path']??'/');if($path==='')$path='/';$q=[];parse_str((string)($p['query']??''),$q);foreach(array_keys($q) as $n){$k=strtolower((string)$n);if(str_starts_with($k,'utm_')||in_array($k,['fbclid','gclid','yclid','ref','referrer'],true))unset($q[$n]);}ksort($q);$qs=http_build_query($q);return 'url|'.$scheme.'|'.$host.'|'.$path.($qs!==''?'?'.$qs:'');}return 'url|'.mb_strtolower($url);}$guid=trim((string)($item['guid']??''));if($guid!=='')return 'guid|'.mb_strtolower($guid);return 'title|'.mb_strtolower(trim((string)($item['title']??'')));}
-function rss_trade_metrics_host_aware(array $items,int $days=30): array{$days=max(1,min(365,$days));$refs=[];$byHost=[];foreach($items as $i){if(!is_array($i))continue;$ref=trim((string)($i['partner_ref_code']??''));if($ref==='')continue;$refs[$ref]=true;$h=rss_trade_normalize_host((string)($i['partner_site_url']??''));if($h==='')$h=rss_trade_normalize_host((string)($i['link']??''));if($h!=='')$byHost[$h][$ref]=true;}$m=[];foreach(array_keys($refs) as $r)$m[$r]=['in'=>0,'out'=>0];if($m===[])return $m;try{$st=db()->query('SELECT ref_code,referer_host,COUNT(*) c FROM in_logs WHERE created_at>=DATE_SUB(NOW(), INTERVAL '.$days.' DAY) GROUP BY ref_code,referer_host');foreach($st?($st->fetchAll(PDO::FETCH_ASSOC)?:[]):[] as $row){$r=trim((string)($row['ref_code']??''));$c=(int)($row['c']??0);if($c<=0)continue;if($r!==''&&isset($m[$r])){$m[$r]['in']+=$c;continue;}if($r!=='')continue;$h=rss_trade_normalize_host((string)($row['referer_host']??''));$mrefs=$h!==''?array_keys($byHost[$h]??[]):[];if(count($mrefs)===1&&isset($m[$mrefs[0]]))$m[$mrefs[0]]['in']+=$c;}$refs2=array_keys($m);$ph=implode(',',array_fill(0,count($refs2),'?'));$st=db()->prepare('SELECT ref_code,COUNT(*) c FROM out_logs WHERE created_at>=DATE_SUB(NOW(), INTERVAL '.$days.' DAY) AND ref_code IN ('.$ph.') GROUP BY ref_code');$st->execute($refs2);foreach($st->fetchAll(PDO::FETCH_ASSOC)?:[] as $row){$r=trim((string)($row['ref_code']??''));if(isset($m[$r]))$m[$r]['out']=(int)($row['c']??0);}}catch(Throwable $e){error_log('[rss] host-aware access-trade metrics lookup failed: '.$e->getMessage());}return $m;}
-function rss_trade_select_host_aware(array $items,int $maxTotal,int $hardCap,int $days=30): array{if($maxTotal<=0||$items===[])return [];$items=rss_trade_enrich_items($items);$seen=[];$titles=[];$b=[];foreach($items as $i){if(!is_array($i))continue;$k=rss_trade_item_key($i);if($k!==''&&isset($seen[$k]))continue;$tk=mb_strtolower(preg_replace('/\s+/u',' ',trim((string)($i['title']??'')))??'');if($tk!==''&&isset($titles[$tk]))continue;if($k!=='')$seen[$k]=true;if($tk!=='')$titles[$tk]=true;$sk=rss_partner_display_source_key($i);if($sk==='')$sk='unknown:'.(string)($i['source_id']??0);$b[$sk][]=$i;}if($b===[])return [];foreach($b as &$x)if(count($x)>1)shuffle($x);unset($x);$cap=min(max(1,$hardCap),max(1,(int)ceil($maxTotal/max(1,count($b)))+1));$flat=[];foreach($b as $x)foreach($x as $i)$flat[]=$i;$metrics=rss_trade_metrics_host_aware($flat,$days);$state=[];foreach($b as $sk=>$x){$f=$x[0]??[];$ref=trim((string)($f['partner_ref_code']??''));$mm=$ref!==''?($metrics[$ref]??['in'=>0,'out'=>0]):['in'=>0,'out'=>0];$state[$sk]=['w'=>rss_trade_weight((int)$mm['in'],(int)$mm['out']),'c'=>0.0,'p'=>0];}$out=[];$order=array_keys($b);shuffle($order);foreach($order as $sk){if(count($out)>=$maxTotal)break;$i=array_shift($b[$sk]);if(is_array($i)){$out[]=$i;$state[$sk]['p']++;}}$last=$out!==[]?rss_partner_display_source_key($out[count($out)-1]):null;while(count($out)<$maxTotal){$active=[];$tw=0.0;foreach($b as $sk=>$x){if($x===[]||$state[$sk]['p']>=$cap)continue;$state[$sk]['c']+=$state[$sk]['w'];$active[$sk]=$state[$sk]['c'];$tw+=$state[$sk]['w'];}if($active===[])break;arsort($active,SORT_NUMERIC);$ks=array_keys($active);$chosen=$ks[0];if($chosen===$last&&count($ks)>1)$chosen=$ks[1];$i=array_shift($b[$chosen]);if(!is_array($i))continue;$state[$chosen]['c']-=max(.0001,$tw);$state[$chosen]['p']++;$out[]=$i;$last=$chosen;}return rss_spread_items_by_partner_site($out);}
+
+function rss_trade_normalize_host(string $value): string
+{
+    $value = trim(strtolower($value));
+    if ($value === '') return '';
+    if (str_contains($value, '://')) {
+        $value = (string)(parse_url($value, PHP_URL_HOST) ?: '');
+    }
+    $value = preg_replace('/:\d+$/', '', $value) ?? $value;
+    $value = rtrim($value, '.');
+    return preg_replace('/^www\./', '', $value) ?? $value;
+}
+
+function rss_trade_item_key(array $item): string
+{
+    $url = trim((string)($item['link'] ?? ''));
+    if ($url !== '') {
+        $parts = parse_url($url);
+        if (is_array($parts)) {
+            $scheme = strtolower((string)($parts['scheme'] ?? ''));
+            $host = rss_trade_normalize_host((string)($parts['host'] ?? ''));
+            $path = (string)($parts['path'] ?? '/');
+            if ($path === '') $path = '/';
+            $query = [];
+            parse_str((string)($parts['query'] ?? ''), $query);
+            foreach (array_keys($query) as $name) {
+                $key = strtolower((string)$name);
+                if (str_starts_with($key, 'utm_') || in_array($key, ['fbclid', 'gclid', 'yclid', 'ref', 'referrer'], true)) {
+                    unset($query[$name]);
+                }
+            }
+            ksort($query);
+            $normalizedQuery = http_build_query($query);
+            return 'url|' . $scheme . '|' . $host . '|' . $path . ($normalizedQuery !== '' ? '?' . $normalizedQuery : '');
+        }
+        return 'url|' . mb_strtolower($url);
+    }
+    $guid = trim((string)($item['guid'] ?? ''));
+    if ($guid !== '') return 'guid|' . mb_strtolower($guid);
+    return 'title|' . mb_strtolower(trim((string)($item['title'] ?? '')));
+}
+
+function rss_trade_metrics_host_aware(array $items, int $days = 30): array
+{
+    $days = max(1, min(365, $days));
+    $refs = [];
+    $refByHost = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) continue;
+        $ref = trim((string)($item['partner_ref_code'] ?? ''));
+        if ($ref === '') continue;
+        $refs[$ref] = true;
+        $host = rss_trade_normalize_host((string)($item['partner_site_url'] ?? ''));
+        if ($host === '') $host = rss_trade_normalize_host((string)($item['link'] ?? ''));
+        if ($host !== '') $refByHost[$host][$ref] = true;
+    }
+
+    $metrics = [];
+    foreach (array_keys($refs) as $ref) $metrics[$ref] = ['in' => 0, 'out' => 0];
+    if ($metrics === []) return $metrics;
+
+    try {
+        $stmt = db()->query(
+            'SELECT ref_code, referer_host, COUNT(*) AS c FROM in_logs '
+            . 'WHERE created_at >= DATE_SUB(NOW(), INTERVAL ' . $days . ' DAY) '
+            . 'GROUP BY ref_code, referer_host'
+        );
+        foreach ($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [] as $row) {
+            $ref = trim((string)($row['ref_code'] ?? ''));
+            $count = (int)($row['c'] ?? 0);
+            if ($count <= 0) continue;
+            if ($ref !== '' && isset($metrics[$ref])) {
+                $metrics[$ref]['in'] += $count;
+                continue;
+            }
+            if ($ref !== '') continue;
+            $host = rss_trade_normalize_host((string)($row['referer_host'] ?? ''));
+            $matchedRefs = $host !== '' ? array_keys($refByHost[$host] ?? []) : [];
+            if (count($matchedRefs) === 1 && isset($metrics[$matchedRefs[0]])) {
+                $metrics[$matchedRefs[0]]['in'] += $count;
+            }
+        }
+
+        $refList = array_keys($metrics);
+        $placeholders = implode(',', array_fill(0, count($refList), '?'));
+        $stmt = db()->prepare(
+            'SELECT ref_code, COUNT(*) AS c FROM out_logs '
+            . 'WHERE created_at >= DATE_SUB(NOW(), INTERVAL ' . $days . ' DAY) '
+            . 'AND ref_code IN (' . $placeholders . ') GROUP BY ref_code'
+        );
+        $stmt->execute($refList);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $ref = trim((string)($row['ref_code'] ?? ''));
+            if (isset($metrics[$ref])) $metrics[$ref]['out'] = (int)($row['c'] ?? 0);
+        }
+    } catch (Throwable $e) {
+        error_log('[rss] host-aware access-trade metrics lookup failed: ' . $e->getMessage());
+    }
+    return $metrics;
+}
+
+function rss_trade_select_host_aware(array $items, int $maxTotal, int $hardPerSiteCap, int $days = 30): array
+{
+    if ($maxTotal <= 0 || $items === []) return [];
+    $maxTotal = max(1, $maxTotal);
+    $hardPerSiteCap = max(1, $hardPerSiteCap);
+    $items = rss_trade_enrich_items($items);
+
+    $seenKeys = [];
+    $seenTitles = [];
+    $buckets = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) continue;
+        $key = rss_trade_item_key($item);
+        if ($key !== '' && isset($seenKeys[$key])) continue;
+        $titleKey = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($item['title'] ?? ''))) ?? '');
+        if ($titleKey !== '' && isset($seenTitles[$titleKey])) continue;
+        if ($key !== '') $seenKeys[$key] = true;
+        if ($titleKey !== '') $seenTitles[$titleKey] = true;
+        $siteKey = rss_partner_display_source_key($item);
+        if ($siteKey === '') $siteKey = 'unknown:' . (string)($item['source_id'] ?? '0');
+        $buckets[$siteKey][] = $item;
+    }
+    if ($buckets === []) return [];
+    foreach ($buckets as &$bucket) if (count($bucket) > 1) shuffle($bucket);
+    unset($bucket);
+
+    $activeSiteCount = count($buckets);
+    $fairShare = (int)ceil($maxTotal / max(1, $activeSiteCount));
+    $effectivePerSiteCap = min($hardPerSiteCap, max(1, $fairShare + 1));
+
+    $flat = [];
+    foreach ($buckets as $bucket) foreach ($bucket as $item) $flat[] = $item;
+    $metrics = rss_trade_metrics_host_aware($flat, $days);
+    $state = [];
+    foreach ($buckets as $siteKey => $bucket) {
+        $first = $bucket[0] ?? [];
+        $ref = trim((string)($first['partner_ref_code'] ?? ''));
+        $m = $ref !== '' ? ($metrics[$ref] ?? ['in' => 0, 'out' => 0]) : ['in' => 0, 'out' => 0];
+        $state[$siteKey] = ['weight' => rss_trade_weight((int)$m['in'], (int)$m['out']), 'current' => 0.0, 'picked' => 0];
+    }
+
+    $result = [];
+    $siteOrder = array_keys($buckets);
+    shuffle($siteOrder);
+    foreach ($siteOrder as $siteKey) {
+        if (count($result) >= $maxTotal) break;
+        $item = array_shift($buckets[$siteKey]);
+        if (!is_array($item)) continue;
+        $result[] = $item;
+        $state[$siteKey]['picked']++;
+    }
+
+    $lastKey = $result !== [] ? rss_partner_display_source_key($result[count($result) - 1]) : null;
+    while (count($result) < $maxTotal) {
+        $active = [];
+        $totalWeight = 0.0;
+        foreach ($buckets as $siteKey => $bucket) {
+            if ($bucket === [] || $state[$siteKey]['picked'] >= $effectivePerSiteCap) continue;
+            $state[$siteKey]['current'] += $state[$siteKey]['weight'];
+            $active[$siteKey] = $state[$siteKey]['current'];
+            $totalWeight += $state[$siteKey]['weight'];
+        }
+        if ($active === []) break;
+        arsort($active, SORT_NUMERIC);
+        $orderedKeys = array_keys($active);
+        $chosenKey = $orderedKeys[0];
+        if ($chosenKey === $lastKey && count($orderedKeys) > 1) $chosenKey = $orderedKeys[1];
+        $item = array_shift($buckets[$chosenKey]);
+        if (!is_array($item)) continue;
+        $state[$chosenKey]['current'] -= max(0.0001, $totalWeight);
+        $state[$chosenKey]['picked']++;
+        $result[] = $item;
+        $lastKey = $chosenKey;
+    }
+
+    return function_exists('rss_spread_items_by_partner_site') ? rss_spread_items_by_partner_site($result) : $result;
+}
