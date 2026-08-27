@@ -1,1 +1,14 @@
-<?php require __DIR__ . '/robots.php';
+User-agent: *
+Disallow: /admin/
+Disallow: /forgot_password.php
+Disallow: /reset_password.php
+Disallow: /search.php
+Disallow: /out.php
+Disallow: /vr_affiliate.php
+Disallow: /sample_images.php
+Disallow: /analytics.php
+Disallow: /page_view_beacon.php
+Disallow: /ranking_refresh.php
+Disallow: /public/
+Disallow: /*?*rank_period=
+Sitemap: https://pinkclub-dl.com/sitemap.php
