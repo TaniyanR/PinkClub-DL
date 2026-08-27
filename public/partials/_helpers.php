@@ -1,14 +1,11 @@
 <?php
 
-require_once __DIR__ . '/../../lib/http_url.php';
-
 if (!function_exists('get_ad_code')) {
     function get_ad_code(string $position_key): ?string
     {
         if (!function_exists('db')) {
             return null;
         }
-
         try {
             $stmt = db()->prepare('SELECT snippet_html FROM code_snippets WHERE slot_key = :slot AND is_enabled = 1 LIMIT 1');
             $stmt->execute([':slot' => $position_key]);
@@ -25,10 +22,9 @@ if (!function_exists('render_ad')) {
     function render_ad(string $position_key, string $page_type = 'home', string $device = 'pc'): void
     {
         $html = get_ad_code($position_key);
-        if ($html === null) {
-            return;
+        if ($html !== null) {
+            echo $html;
         }
-        echo $html;
     }
 }
 
@@ -39,141 +35,72 @@ if (!function_exists('should_show_ad')) {
     }
 }
 
-
-if (!function_exists('rss_widget_direct_items')) {
-    function rss_widget_direct_items(int $limit, bool $requireImage = false): array
+if (!function_exists('rss_fragment_loader_script')) {
+    function rss_fragment_loader_script(): void
     {
-        static $cache = [];
-        if ($limit <= 0 || !function_exists('db')) {
-            return [];
+        static $rendered = false;
+        if ($rendered || !empty($GLOBALS['pcf_rss_fragment_request'])) {
+            return;
         }
+        $rendered = true;
+        $endpoint = function_exists('public_url') ? public_url('rss_trade_fragment.php') : '/rss_trade_fragment.php';
+        ?>
+<script>
+(function () {
+  var endpoint = <?= json_encode($endpoint, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+  var refresh = function () {
+    var groups = {};
+    document.querySelectorAll('[data-rss-fragment]').forEach(function (node) {
+      var type = node.getAttribute('data-rss-fragment');
+      if (!type) return;
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(node);
+    });
 
-        $cacheKey = $limit . '|' . ($requireImage ? '1' : '0');
-        if (isset($cache[$cacheKey])) {
-            return $cache[$cacheKey];
-        }
+    Object.keys(groups).forEach(function (type) {
+      var nodes = groups[type];
+      if (!nodes.length) return;
+      nodes.forEach(function (node) { node.dataset.rssLoading = '1'; });
 
-        try {
-            $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1 ORDER BY pr.updated_at ASC, pr.id ASC LIMIT 12');
-            $sources = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-        } catch (Throwable) {
-            try {
-                $stmt = db()->query('SELECT ps.name AS source_name, pr.feed_url FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND pr.is_enabled = 1 ORDER BY pr.updated_at ASC, pr.id ASC LIMIT 12');
-                $sources = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-            } catch (Throwable) {
-                $sources = [];
-            }
-        }
+      fetch(endpoint + '?type=' + encodeURIComponent(type), { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (response) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.text();
+        })
+        .then(function (html) {
+          if (!html) return;
+          var holder = document.createElement('div');
+          holder.innerHTML = html.trim();
+          var replacement = holder.firstElementChild;
+          if (!replacement) return;
+          nodes.forEach(function (node) {
+            node.replaceWith(replacement.cloneNode(true));
+          });
+        })
+        .catch(function () {})
+        .finally(function () {
+          nodes.forEach(function (node) { node.dataset.rssLoading = '0'; });
+        });
+    });
+  };
 
-        if (!is_array($sources) || $sources === []) {
-            return [];
-        }
-
-        shuffle($sources);
-        $items = [];
-        $seen = [];
-        $perSourceLimit = $requireImage ? 5 : 5;
-        foreach ($sources as $source) {
-            $feedUrl = trim((string)($source['feed_url'] ?? ''));
-            if ($feedUrl === '') {
-                continue;
-            }
-
-            $xmlRaw = http_fetch_public($feedUrl, 2);
-            if (!is_string($xmlRaw) || $xmlRaw === '') {
-                continue;
-            }
-
-            libxml_use_internal_errors(true);
-            $xml = simplexml_load_string($xmlRaw, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
-            if ($xml === false) {
-                continue;
-            }
-
-            $feedItems = $xml->channel->item ?? $xml->item ?? $xml->entry ?? [];
-            $sourceItems = [];
-            foreach ($feedItems as $feedItem) {
-                $link = trim((string)($feedItem->link ?? ''));
-                if ($link === '') {
-                    foreach ($feedItem->link ?? [] as $linkNode) {
-                        $attrs = $linkNode->attributes();
-                        $href = trim((string)($attrs['href'] ?? ''));
-                        if ($href !== '') {
-                            $link = $href;
-                            break;
-                        }
-                    }
-                }
-                $title = trim((string)($feedItem->title ?? ''));
-                if ($title === '' || $link === '') {
-                    continue;
-                }
-
-                $imageUrl = function_exists('rss_extract_first_image_url') ? rss_extract_first_image_url($feedItem) : '';
-                if ($requireImage && $imageUrl === '') {
-                    continue;
-                }
-
-                $guid = trim((string)($feedItem->guid ?? $feedItem->id ?? $link));
-                $key = function_exists('rss_normalize_url') ? rss_normalize_url($link) : mb_strtolower($link);
-                if ($key !== '' && isset($seen[$key])) {
-                    continue;
-                }
-                if ($key !== '') {
-                    $seen[$key] = true;
-                }
-
-                $publishedAt = trim((string)($feedItem->pubDate ?? $feedItem->published ?? $feedItem->updated ?? ''));
-                $timestamp = $publishedAt !== '' ? strtotime($publishedAt) : false;
-                $sourceItems[] = [
-                    'title' => $title,
-                    'link' => $link,
-                    'guid' => $guid,
-                    'published_at' => $timestamp !== false ? date('Y-m-d H:i:s', $timestamp) : '',
-                    'image_url' => $imageUrl,
-                    'source_id' => 0,
-                    'source_name' => (string)($source['source_name'] ?? ''),
-                ];
-
-                if (count($sourceItems) >= $perSourceLimit) {
-                    break;
-                }
-            }
-
-            if ($sourceItems !== []) {
-                shuffle($sourceItems);
-                $items = array_merge($items, $sourceItems);
-            }
-        }
-
-        if ($items === []) {
-            $cache[$cacheKey] = [];
-            return [];
-        }
-
-        shuffle($items);
-        $cache[$cacheKey] = array_slice($items, 0, $limit);
-        return $cache[$cacheKey];
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refresh, { once: true });
+  } else {
+    refresh();
+  }
+}());
+</script>
+        <?php
     }
 }
 
 if (!function_exists('render_shared_text_rss_widget')) {
     function render_shared_text_rss_widget(): void
     {
-        $prevUsedKeys = $GLOBALS['pcf_rss_widget_used_keys'] ?? null;
         $prevMaxItems = $GLOBALS['pcf_rss_widget_max_items'] ?? null;
-
-        $GLOBALS['pcf_rss_widget_used_keys'] = [];
         unset($GLOBALS['pcf_rss_widget_max_items']);
-
         include __DIR__ . '/rss_text_widget.php';
-
-        if ($prevUsedKeys === null) {
-            unset($GLOBALS['pcf_rss_widget_used_keys']);
-        } else {
-            $GLOBALS['pcf_rss_widget_used_keys'] = $prevUsedKeys;
-        }
-
         if ($prevMaxItems === null) {
             unset($GLOBALS['pcf_rss_widget_max_items']);
         } else {
@@ -182,24 +109,12 @@ if (!function_exists('render_shared_text_rss_widget')) {
     }
 }
 
-
 if (!function_exists('render_shared_mobile_rss_widget')) {
     function render_shared_mobile_rss_widget(): void
     {
-        $prevUsedKeys = $GLOBALS['pcf_rss_widget_used_keys'] ?? null;
         $prevMaxItems = $GLOBALS['pcf_rss_widget_max_items'] ?? null;
-
-        $GLOBALS['pcf_rss_widget_used_keys'] = [];
         unset($GLOBALS['pcf_rss_widget_max_items']);
-
         include __DIR__ . '/rss_text_widget.php';
-
-        if ($prevUsedKeys === null) {
-            unset($GLOBALS['pcf_rss_widget_used_keys']);
-        } else {
-            $GLOBALS['pcf_rss_widget_used_keys'] = $prevUsedKeys;
-        }
-
         if ($prevMaxItems === null) {
             unset($GLOBALS['pcf_rss_widget_max_items']);
         } else {
@@ -211,52 +126,49 @@ if (!function_exists('render_shared_mobile_rss_widget')) {
 if (!function_exists('render_shared_content_ad_row')) {
     function render_shared_content_ad_row(string $position_key, string $page_type): void
     {
-        // Keep this helper limited to bottom placement to avoid top-of-content duplication.
         if ($position_key !== 'content_bottom') {
             return;
         }
 
-        $prevUsedKeys = $GLOBALS['pcf_rss_widget_used_keys'] ?? null;
-        $prevMaxItems = $GLOBALS['pcf_rss_widget_max_items'] ?? null;
+        require_once __DIR__ . '/../../lib/app_features.php';
+        require_once __DIR__ . '/../../lib/rss_display_balance.php';
+        require_once __DIR__ . '/../../lib/rss_access_trade.php';
+        require_once __DIR__ . '/../../lib/rss_access_trade_host.php';
+        require_once __DIR__ . '/../../lib/rss_access_trade_candidate.php';
 
-        // Reset widget tracking so this row can render independently from sidebar/top widgets.
-        $GLOBALS['pcf_rss_widget_used_keys'] = [];
-        $GLOBALS['pcf_rss_widget_max_items'] = 50;
-
-        ob_start();
-        include __DIR__ . '/rss_text_widget.php';
-        $leftRssHtml = trim((string)ob_get_clean());
-
-        // Render right column independently so both columns can fill to max count.
-        $GLOBALS['pcf_rss_widget_used_keys'] = [];
-
-        ob_start();
-        include __DIR__ . '/rss_text_widget.php';
-        $rightRssHtml = trim((string)ob_get_clean());
-
-        if ($prevUsedKeys === null) {
-            unset($GLOBALS['pcf_rss_widget_used_keys']);
-        } else {
-            $GLOBALS['pcf_rss_widget_used_keys'] = $prevUsedKeys;
+        $items = [];
+        try {
+            rss_widget_bootstrap(false);
+            $candidates = rss_trade_candidate_pool(60, false, 14);
+            $items = rss_trade_select_host_aware($candidates, 40, 40, 30);
+        } catch (Throwable $e) {
+            error_log('[rss] bottom access-trade widget skipped: ' . $e->getMessage());
+            $items = [];
         }
 
-        if ($prevMaxItems === null) {
-            unset($GLOBALS['pcf_rss_widget_max_items']);
-        } else {
-            $GLOBALS['pcf_rss_widget_max_items'] = $prevMaxItems;
-        }
+        [$leftItems, $rightItems] = rss_trade_split_columns($items);
 
-        $emptyWidget = '<div class="rss-widget rss-widget--text block"><div class="rss-box"><p class="sidebar-empty">テキストRSSの記事がありません。</p></div></div>';
-        if ($leftRssHtml === '') {
-            $leftRssHtml = $emptyWidget;
-        }
-        if ($rightRssHtml === '') {
-            $rightRssHtml = $emptyWidget;
-        }
+        $renderColumn = static function (array $columnItems): string {
+            ob_start();
+            echo '<div class="rss-widget rss-widget--text block"><div class="rss-box">';
+            if ($columnItems === []) {
+                echo '<p class="sidebar-empty">テキストRSSの記事がありません。</p>';
+            } else {
+                echo '<ul class="rss-list">';
+                foreach ($columnItems as $item) {
+                    $href = rss_trade_out_url($item);
+                    echo '<li class="rss-list__item"><a href="' . e($href) . '" target="_blank" rel="noopener noreferrer">' . e((string)($item['title'] ?? '')) . '</a></li>';
+                }
+                echo '</ul>';
+            }
+            echo '</div></div>';
+            return (string)ob_get_clean();
+        };
 
-        echo '<div class="content-ad-row content-ad-row--rss-split" style="margin-top:20px;">';
-        echo '<div class="content-ad-row__rss">' . $leftRssHtml . '</div>';
-        echo '<div class="content-ad-row__rss">' . $rightRssHtml . '</div>';
+        echo '<div class="content-ad-row content-ad-row--rss-split" data-rss-fragment="bottom" style="margin-top:20px;">';
+        echo '<div class="content-ad-row__rss">' . $renderColumn($leftItems) . '</div>';
+        echo '<div class="content-ad-row__rss">' . $renderColumn($rightItems) . '</div>';
         echo '</div>';
+        rss_fragment_loader_script();
     }
 }
