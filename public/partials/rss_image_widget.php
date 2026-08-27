@@ -14,8 +14,8 @@ try {
     rss_widget_bootstrap(false);
     $candidates = rss_trade_candidate_pool(20, true, 14);
     $items = rss_trade_select_host_aware($candidates, 5, 2, 30);
-} catch (Throwable $e) {
-    error_log('[rss] image access-trade selection skipped: ' . $e->getMessage());
+} catch (Throwable) {
+    error_log('[rss] image access-trade selection skipped');
     $items = [];
 }
 ?>
