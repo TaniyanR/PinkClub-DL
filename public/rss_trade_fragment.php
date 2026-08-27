@@ -68,9 +68,9 @@ try {
     elseif ($type === 'image') include __DIR__ . '/partials/rss_image_widget.php';
     else render_shared_content_ad_row('content_bottom', 'home');
     $html = (string)ob_get_clean();
-} catch (Throwable $e) {
+} catch (Throwable) {
     if (ob_get_level() > 0) ob_end_clean();
-    error_log('[rss] fragment generation failed: ' . $e->getMessage());
+    error_log('[rss] fragment generation failed');
     $html = '';
 }
 
