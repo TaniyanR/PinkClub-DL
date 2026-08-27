@@ -141,8 +141,8 @@ if (!function_exists('render_shared_content_ad_row')) {
             rss_widget_bootstrap(false);
             $candidates = rss_trade_candidate_pool(60, false, 14);
             $items = rss_trade_select_host_aware($candidates, 40, 40, 30);
-        } catch (Throwable $e) {
-            error_log('[rss] bottom access-trade widget skipped: ' . $e->getMessage());
+        } catch (Throwable) {
+            error_log('[rss] bottom access-trade widget skipped');
             $items = [];
         }
 
