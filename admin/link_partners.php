@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../public/_bootstrap.php';
+require_once __DIR__ . '/../lib/rss_access_trade.php';
+require_once __DIR__ . '/../lib/rss_access_trade_host.php';
 auth_require_admin();
 analytics_ensure_tables();
 $title = '相互リンク管理';
@@ -15,13 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url = trim((string)post('url', ''));
         $rssUrl = trim((string)post('rss_url', ''));
         $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
-        if (filter_var($url, FILTER_VALIDATE_URL) === false
+        if (
+            $name === ''
+            || filter_var($url, FILTER_VALIDATE_URL) === false
             || !in_array($siteScheme, ['http', 'https'], true)
-            || ($rssUrl !== '' && !http_url_is_public($rssUrl))) {
+            || ($rssUrl !== '' && !http_url_is_public($rssUrl))
+        ) {
             $message = '公開HTTP(S) URLを入力してください。';
         } else {
             $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
-
             db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')
                 ->execute([
                     ':name' => $name,
@@ -29,7 +33,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':url' => $url,
                     ':show_link' => post('show_link', '0') === '1' ? 1 : 0,
                 ]);
-
             $siteId = (int)db()->lastInsertId();
             if ($siteId > 0 && $rssUrl !== '') {
                 db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')
@@ -39,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':show_rss' => post('show_rss', '0') === '1' ? 1 : 0,
                     ]);
             }
-
             site_setting_set('link.sort_mode', post('sort_mode', 'registered') === 'kana' ? 'kana' : 'registered');
             $message = '相互リンクを追加しました。';
         }
@@ -65,7 +67,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sortMode = site_setting_get('link.sort_mode', 'registered');
-$rows = db()->query('SELECT ps.*, pr.id AS rss_id, pr.feed_url, COALESCE(pr.show_rss, pr.is_enabled, 0) AS show_rss FROM partner_sites ps LEFT JOIN partner_rss pr ON pr.partner_site_id = ps.id ORDER BY ps.id DESC')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$rows = db()->query(
+    'SELECT ps.*, pr.id AS rss_id, pr.feed_url, COALESCE(pr.show_rss, pr.is_enabled, 0) AS show_rss '
+    . 'FROM partner_sites ps '
+    . 'LEFT JOIN partner_rss pr ON pr.id = ('
+    . 'SELECT pr2.id FROM partner_rss pr2 WHERE pr2.partner_site_id = ps.id '
+    . 'ORDER BY pr2.updated_at DESC, pr2.id DESC LIMIT 1'
+    . ') ORDER BY ps.id DESC'
+)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$metricItems = [];
+foreach ($rows as $row) {
+    $metricItems[] = [
+        'partner_ref_code' => trim((string)($row['ref_code'] ?? '')),
+        'partner_site_url' => trim((string)($row['url'] ?? '')),
+        'link' => trim((string)($row['url'] ?? '')),
+    ];
+}
+$tradeMetrics = rss_trade_metrics_host_aware($metricItems, 30);
+
 require __DIR__ . '/includes/header.php';
 ?>
 <section class="admin-card admin-card--form">
@@ -84,18 +104,27 @@ require __DIR__ . '/includes/header.php';
       <label><input type="radio" name="sort_mode" value="registered" <?= $sortMode !== 'kana' ? 'checked' : '' ?>> 登録順</label>
       <label><input type="radio" name="sort_mode" value="kana" <?= $sortMode === 'kana' ? 'checked' : '' ?>> あいうえお順</label>
     </fieldset>
-    <div class="admin-actions">
-      <button type="submit">追加</button>
-    </div>
+    <div class="admin-actions"><button type="submit">追加</button></div>
   </form>
 </section>
 
 <section class="admin-card">
+  <p style="margin-top:0;">アクセストレードは直近30日のIN/OUTを使用します。「返還不足」は IN − OUT、配分ウェイトは現在のRSS優先度計算値です。</p>
+  <div style="overflow-x:auto;">
   <table class="admin-table">
-    <tr><th>ID</th><th style="white-space:nowrap;">サイト名</th><th>URL</th><th style="width:1%;white-space:nowrap;text-align:center;">相互リンク表示</th><th style="width:1%;white-space:nowrap;text-align:center;">RSS表示</th><th>編集</th><th>削除</th></tr>
+    <tr><th>ID</th><th style="white-space:nowrap;">サイト名</th><th>URL</th><th>30日IN</th><th>30日OUT</th><th>返還不足</th><th>配分ウェイト</th><th style="width:1%;white-space:nowrap;text-align:center;">相互リンク表示</th><th style="width:1%;white-space:nowrap;text-align:center;">RSS表示</th><th>編集</th><th>削除</th></tr>
     <?php foreach ($rows as $r): ?>
+      <?php
+        $ref = trim((string)($r['ref_code'] ?? ''));
+        $metric = $tradeMetrics[$ref] ?? ['in' => 0, 'out' => 0];
+        $inCount = max(0, (int)($metric['in'] ?? 0));
+        $outCount = max(0, (int)($metric['out'] ?? 0));
+        $debt = $inCount - $outCount;
+        $weight = rss_trade_weight($inCount, $outCount);
+      ?>
       <tr>
         <td><?= e((string)$r['id']) ?></td><td style="white-space:nowrap;"><?= e((string)$r['name']) ?></td><td><?= e((string)$r['url']) ?></td>
+        <td><?= e((string)$inCount) ?></td><td><?= e((string)$outCount) ?></td><td><?= e(($debt > 0 ? '+' : '') . (string)$debt) ?></td><td><?= e(number_format($weight, 2, '.', '')) ?></td>
         <td style="width:1%;white-space:nowrap;text-align:center;">
           <form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="toggle_link"><input type="hidden" name="id" value="<?= e((string)$r['id']) ?>">
             <label><input type="checkbox" name="show_link" value="1" <?= ((int)($r['show_link'] ?? 1) === 1) ? 'checked' : '' ?> onchange="this.form.submit()"></label>
@@ -109,16 +138,10 @@ require __DIR__ . '/includes/header.php';
           <?php endif; ?>
         </td>
         <td><a class="button-secondary" href="<?= e(admin_url('link_partner_edit.php?id=' . (string)$r['id'])) ?>">編集</a></td>
-        <td>
-          <form method="post">
-            <?= csrf_input() ?>
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="<?= e((string)$r['id']) ?>">
-            <button type="submit" class="button-secondary">削除</button>
-          </form>
-        </td>
+        <td><form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= e((string)$r['id']) ?>"><button type="submit" class="button-secondary">削除</button></form></td>
       </tr>
     <?php endforeach; ?>
   </table>
+  </div>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
