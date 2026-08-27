@@ -19,8 +19,8 @@ try {
         $maxItems = min(40, max(0, (int)$GLOBALS['pcf_rss_widget_max_items']));
     }
     $items = rss_trade_select_host_aware($candidates, $maxItems, max(1, $maxItems), 30);
-} catch (Throwable $e) {
-    error_log('[rss] text access-trade selection skipped: ' . $e->getMessage());
+} catch (Throwable) {
+    error_log('[rss] text access-trade selection skipped');
     $items = [];
 }
 ?>
