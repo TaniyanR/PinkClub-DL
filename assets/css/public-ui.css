@@ -984,3 +984,145 @@
 .pcf-reverse-ranking__count strong { color:#d81b60; font-size:16px; }
 .pcf-reverse-ranking__empty { padding:18px; border:1px dashed #cfd7e5; border-radius:10px; background:#f8faff; color:#687186; text-align:center; }
 @media(max-width:560px){.pcf-reverse-ranking__row{grid-template-columns:34px minmax(0,1fr);gap:9px}.pcf-reverse-ranking__count{grid-column:2}.pcf-reverse-ranking__position{width:29px;height:29px}}
+
+.pcf-item-ranking {
+  margin-top: 28px;
+  overflow: hidden;
+  border: 1px solid #e2e7f0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff 0%, #f8faff 100%);
+  box-shadow: 0 12px 32px rgba(28, 45, 82, .08);
+}
+.pcf-item-ranking__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 16px;
+}
+.pcf-item-ranking__eyebrow {
+  margin: 0 0 3px;
+  color: #d81b60;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+.pcf-item-ranking__heading .section-title { margin: 0; }
+.pcf-item-ranking__description {
+  margin: 0;
+  color: #687186;
+  font-size: 12px;
+}
+.pcf-item-ranking__tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 24px 18px;
+  border-bottom: 1px solid #e6eaf1;
+}
+.pcf-item-ranking__tab {
+  min-width: 54px;
+  padding: 8px 12px;
+  border: 1px solid #cad3e2;
+  border-radius: 999px;
+  background: #fff;
+  color: #31518e;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+.pcf-item-ranking__tab:hover,
+.pcf-item-ranking__tab.is-active {
+  border-color: #2457d6;
+  background: #2457d6;
+  color: #fff;
+}
+.pcf-item-ranking__list {
+  max-height: 780px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.pcf-item-ranking__row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 66px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #edf0f5;
+}
+.pcf-item-ranking__row:last-child { border-bottom: 0; }
+.pcf-item-ranking__row:hover { background: #fff; }
+.pcf-item-ranking__position {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e9eef8;
+  color: #36517e;
+  font-size: 14px;
+  font-weight: 900;
+}
+.pcf-item-ranking__row.is-top .pcf-item-ranking__position {
+  background: linear-gradient(135deg, #ff4f9a, #d81b60);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(216, 27, 96, .24);
+}
+.pcf-item-ranking__title {
+  min-width: 0;
+  color: #17233b;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+  text-decoration: none;
+}
+.pcf-item-ranking__title:hover {
+  color: #d81b60;
+  text-decoration: underline;
+}
+.pcf-item-ranking__metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #7a8292;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pcf-item-ranking__metrics strong {
+  min-width: 66px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: #2457d6;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .pcf-item-ranking__heading {
+    display: block;
+    padding: 18px 16px 12px;
+  }
+  .pcf-item-ranking__description { margin-top: 6px; }
+  .pcf-item-ranking__tabs {
+    padding: 0 16px 14px;
+    overflow-x: auto;
+  }
+  .pcf-item-ranking__row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .pcf-item-ranking__metrics {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .pcf-item-ranking__position {
+    width: 31px;
+    height: 31px;
+  }
+}
