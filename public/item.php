@@ -746,57 +746,28 @@ require __DIR__ . '/partials/header.php';
   <?php endif; ?>
 
 
-  <section id="access-ranking" class="block" style="margin-top:24px;">
-    <h2 class="section-title">人気の作品ランキング！</h2>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-    <?php foreach ($accessRankingTabs as $tabKey => $tabConfig): ?>
-      <?php
-      $tabQuery = ['rank_period' => (string)$tabKey];
-      if ($id > 0) {
-          $tabQuery['id'] = (string)$id;
+  <?php pcf_render_item_access_ranking(
+      $accessRankingTabs,
+      $accessRankingPeriod,
+      static function (string $period) use ($id, $contentId, $cid): string {
+          $tabQuery = ['rank_period' => $period];
+          if ($id > 0) {
+              $tabQuery['id'] = (string)$id;
+          }
+          if ($contentId !== '') {
+              $tabQuery['content_id'] = $contentId;
+          }
+          if ($cid !== '') {
+              $tabQuery['cid'] = $cid;
+          }
+          return public_url('item.php') . '?' . http_build_query($tabQuery) . '#access-ranking';
+      },
+      $accessRankingRows,
+      static function (array $row): string {
+          $itemId = (int)($row['id'] ?? 0);
+          return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
       }
-      if ($contentId !== '') {
-          $tabQuery['content_id'] = $contentId;
-      }
-      if ($cid !== '') {
-          $tabQuery['cid'] = $cid;
-      }
-      $tabUrl = public_url(basename(__FILE__)) . '?' . http_build_query($tabQuery) . '#access-ranking';
-      ?>
-      <?php $tabStyle = $accessRankingPeriod === $tabKey ? 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#0b5ed7; color:#fff; font-weight:700; text-decoration:none;' : 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#fff; color:#0b5ed7; font-weight:700; text-decoration:none;'; ?>
-      <a href="<?= e($tabUrl) ?>" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
-    <?php endforeach; ?>
-  </div>
-    <?php if ($accessRankingRows !== []): ?>
-      <div style="max-height:800px; overflow-y:auto; border:1px solid #ddd;">
-        <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
-          <thead>
-            <tr>
-              <th style="width:80px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">順位</th>
-              <th style="width:auto; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">作品タイトル</th>
-              <th style="width:120px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">ランキング点</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($accessRankingRows as $index => $rankingRow): ?>
-              <tr>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)($index + 1)) ?></td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:left;">
-                <?php
-                $rankingItemUrl = public_url('item.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? ''));
-                ?>
-                <a href="<?= e($rankingItemUrl) ?>"><?= e((string)($rankingRow['title'] ?? '')) ?></a>
-              </td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)((int)($rankingRow['access_count'] ?? 0))) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php else: ?>
-      <?php pcf_render_empty('人気の作品ランキング！のデータがありません。'); ?>
-    <?php endif; ?>
-  </section>
+  ); ?>
 
 </article>
 
