@@ -19,8 +19,30 @@ function rss_trade_candidate_http_url(string $value): string
     if (filter_var($url, FILTER_VALIDATE_URL) === false) {
         return '';
     }
-    $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: ''));
-    return in_array($scheme, ['http', 'https'], true) ? $url : '';
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return '';
+    }
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    $host = strtolower(trim((string)($parts['host'] ?? ''), '[]'));
+    if (!in_array($scheme, ['http', 'https'], true) || $host === '' || isset($parts['user']) || isset($parts['pass'])) {
+        return '';
+    }
+
+    $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
+    if (!in_array($port, [80, 443], true)) {
+        return '';
+    }
+
+    if (
+        filter_var($host, FILTER_VALIDATE_IP) !== false
+        && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false
+    ) {
+        return '';
+    }
+
+    return $url;
 }
 
 function rss_trade_disable_stale_sources(): void
@@ -36,21 +58,21 @@ function rss_trade_disable_stale_sources(): void
             . 'SET rs.is_enabled = 0, rs.updated_at = NOW() '
             . 'WHERE rs.source_type = "partner_link" '
             . 'AND rs.is_enabled = 1 '
-            . 'AND ( '
+            . 'AND ('
             . 'TRIM(COALESCE(pr.feed_url, "")) = "" '
             . 'OR COALESCE(pr.show_rss, pr.is_enabled, 1) <> 1 '
             . 'OR rs.feed_url <> pr.feed_url '
-            . 'OR EXISTS ( '
+            . 'OR EXISTS ('
             . 'SELECT 1 FROM partner_rss newer '
             . 'WHERE newer.partner_site_id = pr.partner_site_id '
             . 'AND COALESCE(newer.show_rss, newer.is_enabled, 1) = 1 '
             . 'AND TRIM(COALESCE(newer.feed_url, "")) <> "" '
-            . 'AND (newer.updated_at > pr.updated_at OR (newer.updated_at = pr.updated_at AND newer.id > pr.id)) '
-            . ') '
+            . 'AND (newer.updated_at > pr.updated_at OR (newer.updated_at = pr.updated_at AND newer.id > pr.id))'
+            . ')'
             . ')'
         );
-    } catch (Throwable $e) {
-        error_log('[rss] stale partner source cleanup skipped: ' . $e->getMessage());
+    } catch (Throwable) {
+        error_log('[rss] stale partner source cleanup skipped');
     }
 }
 
@@ -70,34 +92,35 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
             . 'AND TRIM(COALESCE(pr.feed_url, "")) <> "" '
             . 'ORDER BY ps.id ASC, pr.updated_at DESC, pr.id DESC'
         )->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    } catch (Throwable $e) {
-        error_log('[rss] canonical partner RSS list failed: ' . $e->getMessage());
+    } catch (Throwable) {
+        error_log('[rss] canonical partner RSS list failed');
         return [];
     }
 
     $feedBySite = [];
     foreach ($rows as $row) {
+        if (!is_array($row)) continue;
         $siteId = (int)($row['partner_site_id'] ?? 0);
         if ($siteId <= 0 || isset($feedBySite[$siteId])) continue;
         $feedUrl = rss_trade_candidate_http_url((string)($row['feed_url'] ?? ''));
-        if ($feedUrl === '') continue;
-        $feedBySite[$siteId] = [
-            'rss_id' => (int)($row['partner_rss_id'] ?? 0),
-            'feed_url' => $feedUrl,
-        ];
+        $rssId = (int)($row['partner_rss_id'] ?? 0);
+        if ($feedUrl === '' || $rssId <= 0) continue;
+        $feedBySite[$siteId] = ['rss_id' => $rssId, 'feed_url' => $feedUrl];
     }
     if ($feedBySite === []) return [];
 
     $siteIds = array_keys($feedBySite);
-    shuffle($siteIds);
+    if (count($siteIds) > 1) shuffle($siteIds);
+
     $all = [];
     $seen = [];
+    $seenTitles = [];
 
     foreach ($siteIds as $partnerSiteId) {
         $feed = $feedBySite[$partnerSiteId] ?? null;
         if (!is_array($feed)) continue;
         $rssId = (int)($feed['rss_id'] ?? 0);
-        $feedUrl = trim((string)($feed['feed_url'] ?? ''));
+        $feedUrl = rss_trade_candidate_http_url((string)($feed['feed_url'] ?? ''));
         if ($rssId <= 0 || $feedUrl === '') continue;
 
         try {
@@ -122,20 +145,31 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
                 . ' ORDER BY ri.published_at DESC, ri.id DESC LIMIT ' . $perSiteLimit;
             $stmt = db()->prepare($sql);
             $stmt->execute([':source_id' => $sourceId]);
-            $items = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-            foreach ($items as $row) {
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                if (!is_array($row)) continue;
                 $url = rss_trade_candidate_http_url((string)($row['url'] ?? ''));
                 if ($url === '') continue;
+
                 $imageUrl = rss_trade_candidate_http_url((string)($row['image_url'] ?? ''));
                 if ($requireImage && $imageUrl === '') continue;
+
+                $title = trim((string)($row['title'] ?? ''));
+                if ($title === '') continue;
                 $guid = trim((string)($row['guid'] ?? ''));
+
                 $dedupe = function_exists('rss_normalize_url') ? rss_normalize_url($url) : mb_strtolower($url);
                 if ($dedupe === '') $dedupe = 'url|' . mb_strtolower($url);
                 if (isset($seen[$dedupe])) continue;
+
+                $titleKey = mb_strtolower(preg_replace('/\s+/u', ' ', $title) ?? '');
+                if ($titleKey !== '' && isset($seenTitles[$titleKey])) continue;
+
                 $seen[$dedupe] = true;
+                if ($titleKey !== '') $seenTitles[$titleKey] = true;
+
                 $all[] = [
-                    'title' => (string)($row['title'] ?? ''),
+                    'title' => $title,
                     'link' => $url,
                     'guid' => $guid,
                     'published_at' => (string)($row['published_at'] ?? ''),
@@ -145,8 +179,8 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
                     'partner_site_id' => (int)$partnerSiteId,
                 ];
             }
-        } catch (Throwable $e) {
-            error_log('[rss] canonical candidate fetch failed for partner ' . $partnerSiteId . ': ' . $e->getMessage());
+        } catch (Throwable) {
+            error_log('[rss] canonical candidate fetch failed');
         }
     }
 

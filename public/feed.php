@@ -7,12 +7,24 @@ require_once __DIR__ . '/../lib/site_article_feeds.php';
 function pcf_site_feed_xml(string $value): string { return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8'); }
 function pcf_site_feed_item_url(array $item): string
 {
-    $contentId=trim((string)($item['content_id']??''));if($contentId!=='')return public_url('item.php?cid='.rawurlencode($contentId));
-    $id=(int)($item['id']??0);return $id>0?public_url('item.php?id='.$id):public_url('');
+    $id = (int)($item['id'] ?? 0);
+    if ($id > 0) return public_url('item.php?id=' . $id);
+    $contentId = trim((string)($item['content_id'] ?? ''));
+    return $contentId !== '' ? public_url('item.php?cid=' . rawurlencode($contentId)) : public_url('');
 }
 function pcf_site_feed_date(?string $value): string
 {
     $timestamp=$value!==null&&trim($value)!==''?strtotime($value):false;if($timestamp===false)$timestamp=time();return date(DATE_RSS,$timestamp);
+}
+function pcf_site_feed_image_mime(string $url): string
+{
+    $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?: ''));
+    return match (pathinfo($path, PATHINFO_EXTENSION)) {
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        default => 'image/jpeg',
+    };
 }
 
 $siteTitle=trim(site_setting_get('site.title',site_setting_get('site.name',APP_NAME)));if($siteTitle==='')$siteTitle=APP_NAME;
@@ -31,7 +43,7 @@ header('Content-Type: application/rss+xml; charset=UTF-8');echo '<?xml version="
     <language>ja</language>
     <lastBuildDate><?= pcf_site_feed_xml($lastBuildDate) ?></lastBuildDate>
 <?php foreach($items as $item): ?>
-<?php if(!is_array($item))continue;$itemTitle=trim((string)($item['title']??''));if($itemTitle==='')continue;$itemLink=pcf_site_feed_item_url($item);$itemGuid=trim((string)($item['content_id']??''));if($itemGuid==='')$itemGuid=$itemLink;$itemDate=trim((string)($item['release_date']??''));if($itemDate==='')$itemDate=trim((string)($item['updated_at']??''));$itemDescription=trim((string)($item['category_name']??''));$itemImage=site_article_feed_image($item);$itemImageMime=$itemImage!==''?site_article_feed_image_mime($itemImage):''; ?>
+<?php if(!is_array($item))continue;$itemTitle=trim((string)($item['title']??''));if($itemTitle==='')continue;$itemLink=pcf_site_feed_item_url($item);$itemGuid=trim((string)($item['content_id']??''));if($itemGuid==='')$itemGuid=$itemLink;$itemDate=trim((string)($item['release_date']??''));if($itemDate==='')$itemDate=trim((string)($item['updated_at']??''));$itemDescription=trim((string)($item['category_name']??''));$itemImage=site_article_feed_image($item);$itemImageMime=$itemImage!==''?pcf_site_feed_image_mime($itemImage):''; ?>
     <item>
       <title><?= pcf_site_feed_xml($itemTitle) ?></title>
       <link><?= pcf_site_feed_xml($itemLink) ?></link>
