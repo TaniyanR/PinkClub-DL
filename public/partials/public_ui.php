@@ -771,6 +771,73 @@ if (!function_exists('pcf_render_taxonomy_card')) {
     }
 }
 
+if (!function_exists('pcf_render_item_access_ranking')) {
+    function pcf_render_item_access_ranking(
+        array $tabs,
+        string $activePeriod,
+        callable $tabUrlBuilder,
+        array $rows,
+        callable $rowUrlBuilder,
+        string $emptyMessage = '人気の作品ランキングのデータがありません。',
+        string $heading = '人気の作品ランキング'
+    ): void {
+        $displayRows = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $title = trim((string)($row['title'] ?? $row['name'] ?? ''));
+            $url = trim((string)$rowUrlBuilder($row));
+            if ($title === '' || $url === '') {
+                continue;
+            }
+            $displayRows[] = [
+                'title' => $title,
+                'url' => $url,
+                'page_views' => max(0, (int)($row['page_view_count'] ?? 0)),
+                'out_clicks' => max(0, (int)($row['out_click_count'] ?? 0)),
+                'score' => max(0, (int)($row['access_count'] ?? 0)),
+            ];
+        }
+
+        echo '<section id="access-ranking" class="block pcf-item-ranking">';
+        echo '<div class="pcf-item-ranking__heading"><div>';
+        echo '<p class="pcf-item-ranking__eyebrow">ACCESS RANKING</p>';
+        echo '<h2 class="section-title">' . e($heading) . '</h2>';
+        echo '</div><p class="pcf-item-ranking__description">閲覧数と元サイトへのアクセスをもとに集計しています。</p></div>';
+        echo '<nav class="pcf-item-ranking__tabs" aria-label="ランキング期間">';
+        foreach ($tabs as $tabKey => $tabConfig) {
+            $period = (string)$tabKey;
+            $label = is_array($tabConfig) ? trim((string)($tabConfig['label'] ?? '')) : '';
+            $url = trim((string)$tabUrlBuilder($period));
+            if ($label === '' || $url === '') {
+                continue;
+            }
+            $isActive = $activePeriod === $period;
+            echo '<a href="' . e($url) . '" rel="nofollow" class="pcf-item-ranking__tab' . ($isActive ? ' is-active' : '') . '"' . ($isActive ? ' aria-current="page"' : '') . '>' . e($label) . '</a>';
+        }
+        echo '</nav>';
+
+        if ($displayRows === []) {
+            pcf_render_empty($emptyMessage);
+        } else {
+            echo '<ol class="pcf-item-ranking__list">';
+            foreach ($displayRows as $index => $row) {
+                echo '<li class="pcf-item-ranking__row' . ($index < 3 ? ' is-top' : '') . '">';
+                echo '<span class="pcf-item-ranking__position">' . e((string)($index + 1)) . '</span>';
+                echo '<a class="pcf-item-ranking__title" href="' . e((string)$row['url']) . '">' . e((string)$row['title']) . '</a>';
+                echo '<span class="pcf-item-ranking__metrics">';
+                echo '<span>閲覧 ' . e((string)$row['page_views']) . '</span>';
+                echo '<span>移動 ' . e((string)$row['out_clicks']) . '</span>';
+                echo '<strong>' . e((string)$row['score']) . ' pt</strong>';
+                echo '</span></li>';
+            }
+            echo '</ol>';
+        }
+        echo '</section>';
+    }
+}
+
 if (!function_exists('pcf_render_empty')) {
     function pcf_render_empty(string $message): void
     {
