@@ -148,12 +148,13 @@ function trusted_fallback_base_url(string $detectedPath): string
     $host = is_array($parsed) ? strtolower(trim((string)($parsed['host'] ?? ''), '[]')) : '';
     $port = is_array($parsed) && isset($parsed['port']) ? (int)$parsed['port'] : null;
     $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+    $isTrustedStaging = $host === 'pcdlight.bichi.xyz';
 
-    if ($isLocal) {
+    if ($isLocal || $isTrustedStaging) {
         $requestScheme = strtolower(trim((string)($_SERVER['REQUEST_SCHEME'] ?? '')));
-        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
-        $scheme = $requestScheme === 'https' || $isHttps ? 'https' : 'http';
+        $forwardedProto = strtolower(trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? ''));
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        $scheme = ($requestScheme === 'https' || $forwardedProto === 'https' || $isHttps) ? 'https' : 'http';
         $displayHost = $host === '::1' ? '[::1]' : $host;
         if ($port !== null && $port >= 1 && $port <= 65535) {
             $displayHost .= ':' . $port;
@@ -206,7 +207,7 @@ if (is_file($localConfigPath)) {
                 $localDbConfig['dbname'] = $localDbConfig['name'];
             }
             if (!isset($localDbConfig['pass']) && isset($localDbConfig['password'])) {
-                $localDbConfig['pass'] = $localDbConfig['password'];
+                $localDbConfig['pass'] = $localConfig['db']['password'];
             }
             $dbConfig = array_replace($dbConfig, array_intersect_key($localDbConfig, $dbConfig));
         }

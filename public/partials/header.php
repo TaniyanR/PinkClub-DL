@@ -51,11 +51,21 @@ if ($ogImage === '' && $logoPath !== '') $ogImage = $logoUrl;
 if ($ogImage !== '' && !str_starts_with($ogImage, 'http://') && !str_starts_with($ogImage, 'https://') && !str_starts_with($ogImage, '/')) $ogImage = asset_url($ogImage);
 $headerScriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
 $itemIdForSocial = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-if ($headerScriptName === 'item.php' && $ogImage !== '' && is_int($itemIdForSocial) && $itemIdForSocial > 0) {
-    $ogImage = public_url('social-image.php?id=' . $itemIdForSocial);
+if ($headerScriptName === 'item.php' && is_int($itemIdForSocial) && $itemIdForSocial > 0) {
+    $ogImage = public_url('social-image.php?id=' . $itemIdForSocial . '&v=3');
 }
 $ogImageAlt = trim($titleBaseText !== '' ? $titleBaseText : $siteName);
 $jsonLdText = isset($jsonLd) && is_string($jsonLd) && $jsonLd !== '' ? $jsonLd : '';
+if ($ogImage !== '' && $jsonLdText !== '') {
+    $jsonLdData = json_decode($jsonLdText, true);
+    if (is_array($jsonLdData) && (string)($jsonLdData['@type'] ?? '') === 'Product') {
+        $jsonLdData['image'] = $ogImage;
+        $encodedJsonLd = json_encode($jsonLdData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
+        if (is_string($encodedJsonLd)) {
+            $jsonLdText = $encodedJsonLd;
+        }
+    }
+}
 $relPrevHref = isset($relPrev) && is_string($relPrev) && $relPrev !== '' ? $relPrev : '';
 $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relNext : '';
 ?>
