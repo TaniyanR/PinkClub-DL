@@ -25,7 +25,8 @@ try {
         <?php foreach ($items as $item) : ?>
             <li class="rss-image-list__item">
                 <?php if (trim((string)($item['image_url'] ?? '')) !== '') : ?>
-                    <img src="<?php echo e((string)$item['image_url']); ?>" alt="" loading="lazy" decoding="async" onerror="this.closest('li').remove();">
+                    <?php $rssImageUrl = public_url('rss-image.php') . '?' . http_build_query(['source' => (int)($item['source_id'] ?? 0), 'url' => (string)($item['link'] ?? '')], '', '&', PHP_QUERY_RFC3986); ?>
+                    <img src="<?php echo e($rssImageUrl); ?>" alt="" loading="lazy" decoding="async" onerror="this.closest('li').remove();">
                 <?php endif; ?>
                 <a href="<?php echo e(rss_trade_out_url($item)); ?>" target="_blank" rel="noopener noreferrer"><?php echo e((string)($item['title'] ?? '')); ?></a>
             </li>
