@@ -25,11 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url = trim((string)post('url', ''));
         $rssUrl = trim((string)post('rss_url', ''));
         $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        $rssScheme = $rssUrl !== '' ? strtolower((string)parse_url($rssUrl, PHP_URL_SCHEME)) : '';
         if (
             $name === ''
             || filter_var($url, FILTER_VALIDATE_URL) === false
             || !in_array($siteScheme, ['http', 'https'], true)
-            || ($rssUrl !== '' && !http_url_is_public($rssUrl))
+            || ($rssUrl !== '' && (
+                filter_var($rssUrl, FILTER_VALIDATE_URL) === false
+                || !in_array($rssScheme, ['http', 'https'], true)
+            ))
         ) {
             $message = '公開HTTP(S) URLを入力してください。';
             $messageIsError = true;
