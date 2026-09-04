@@ -6,6 +6,13 @@ require_once __DIR__ . '/../lib/rss_access_trade.php';
 require_once __DIR__ . '/../lib/rss_access_trade_host.php';
 auth_require_admin();
 analytics_ensure_tables();
+if (!db_column_exists('partner_sites', 'show_link')) {
+    try {
+        db()->exec('ALTER TABLE partner_sites ADD COLUMN show_link TINYINT(1) NOT NULL DEFAULT 1');
+    } catch (Throwable $e) {
+        error_log('[links] show_link column self-heal failed: ' . $e->getMessage());
+    }
+}
 $title = '相互リンク管理';
 $message = null;
 
