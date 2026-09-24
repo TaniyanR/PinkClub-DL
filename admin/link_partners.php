@@ -6,8 +6,16 @@ require_once __DIR__ . '/../lib/rss_access_trade.php';
 require_once __DIR__ . '/../lib/rss_access_trade_host.php';
 auth_require_admin();
 analytics_ensure_tables();
+if (!db_column_exists('partner_sites', 'show_link')) {
+    try {
+        db()->exec('ALTER TABLE partner_sites ADD COLUMN show_link TINYINT(1) NOT NULL DEFAULT 1');
+    } catch (Throwable $e) {
+        error_log('[links] show_link column self-heal failed: ' . $e->getMessage());
+    }
+}
 $title = '相互リンク管理';
 $message = null;
+$messageIsError = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail((string)post('_csrf', ''));
@@ -17,33 +25,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url = trim((string)post('url', ''));
         $rssUrl = trim((string)post('rss_url', ''));
         $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        $rssScheme = $rssUrl !== '' ? strtolower((string)parse_url($rssUrl, PHP_URL_SCHEME)) : '';
         if (
             $name === ''
             || filter_var($url, FILTER_VALIDATE_URL) === false
             || !in_array($siteScheme, ['http', 'https'], true)
-            || ($rssUrl !== '' && !http_url_is_public($rssUrl))
+            || ($rssUrl !== '' && (
+                filter_var($rssUrl, FILTER_VALIDATE_URL) === false
+                || !in_array($rssScheme, ['http', 'https'], true)
+            ))
         ) {
             $message = '公開HTTP(S) URLを入力してください。';
+            $messageIsError = true;
         } else {
-            $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
-            db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')
-                ->execute([
-                    ':name' => $name,
-                    ':ref' => $refCode,
-                    ':url' => $url,
-                    ':show_link' => post('show_link', '0') === '1' ? 1 : 0,
-                ]);
-            $siteId = (int)db()->lastInsertId();
-            if ($siteId > 0 && $rssUrl !== '') {
-                db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')
+            $pdo = db();
+            try {
+                $pdo->beginTransaction();
+                $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
+                $pdo->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')
                     ->execute([
-                        ':sid' => $siteId,
-                        ':url' => $rssUrl,
-                        ':show_rss' => post('show_rss', '0') === '1' ? 1 : 0,
+                        ':name' => $name,
+                        ':ref' => $refCode,
+                        ':url' => $url,
+                        ':show_link' => post('show_link', '0') === '1' ? 1 : 0,
                     ]);
+                $siteId = (int)$pdo->lastInsertId();
+                if ($siteId > 0 && $rssUrl !== '') {
+                    $pdo->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')
+                        ->execute([
+                            ':sid' => $siteId,
+                            ':url' => $rssUrl,
+                            ':show_rss' => post('show_rss', '0') === '1' ? 1 : 0,
+                        ]);
+                }
+                site_setting_set('link.sort_mode', post('sort_mode', 'registered') === 'kana' ? 'kana' : 'registered');
+                $pdo->commit();
+                $message = '相互リンクを追加しました。';
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                error_log('[links] partner create failed: ' . $e->getMessage());
+                $message = '相互リンクの追加に失敗しました: ' . $e->getMessage();
+                $messageIsError = true;
             }
-            site_setting_set('link.sort_mode', post('sort_mode', 'registered') === 'kana' ? 'kana' : 'registered');
-            $message = '相互リンクを追加しました。';
         }
     } elseif ($action === 'toggle_link') {
         db()->prepare('UPDATE partner_sites SET show_link = :show, updated_at = NOW() WHERE id = :id')
@@ -90,7 +115,7 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="admin-card admin-card--form">
   <h1>相互リンク管理</h1>
-  <?php if ($message): ?><p class="flash success"><?= e($message) ?></p><?php endif; ?>
+  <?php if ($message): ?><p class="flash <?= $messageIsError ? 'error' : 'success' ?>"><?= e($message) ?></p><?php endif; ?>
   <form method="post" style="max-width:760px;">
     <?= csrf_input() ?>
     <input type="hidden" name="action" value="create">
