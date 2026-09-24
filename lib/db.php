@@ -10,14 +10,13 @@ function db_options(): array
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 }
-
 function db_validate_config(array $cfg, bool $requireDbName): array
 {
     $errors = [];
     if (trim((string)($cfg['host'] ?? '')) === '') {
         $errors[] = 'host が空です';
     }
-    if ((int)($cfg['port'] ?? 0) <= 0) {
+    if ((int)($cfg['port'] ?? 0) <= 0 || (int)$cfg['port'] > 65535) {
         $errors[] = 'port が不正です';
     }
     if (trim((string)($cfg['user'] ?? '')) === '') {
@@ -48,6 +47,27 @@ function db_log_connection_error(array $cfg, string $dsn, Throwable $e, array $e
     error_log('db connection failed: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
+/** Safe diagnostics shared by setup and the installer; never echo driver messages. */
+function db_connection_error_message(Throwable $exception): string
+{
+    if (!extension_loaded('pdo_mysql')) {
+        return 'PHPのPDO MySQL拡張が有効ではありません。';
+    }
+    while ($exception->getPrevious() !== null) {
+        $exception = $exception->getPrevious();
+    }
+    $code = $exception instanceof PDOException
+        ? (int)($exception->errorInfo[1] ?? 0)
+        : (int)$exception->getCode();
+    return match ($code) {
+        1045 => 'MySQLの認証が拒否されました（1045）。DBユーザー名・パスワード・接続元ホストの許可を確認してください。',
+        1044 => '対象DBへのアクセス権がありません（1044）。サーバーパネルでDBユーザーを対象DBへ追加し、権限を確認してください。',
+        1049 => '指定したデータベースが存在しません（1049）。サーバーパネルのDB名を確認してください。',
+        2002, 2003, 2005, 2006, 2013 => 'MySQLサーバーへ接続できません。DBホスト名・ポート・稼働状況を確認してください。',
+        default => 'DB接続情報とサーバーのMySQL設定を確認してください。',
+    };
+}
+
 function db_server_pdo(): PDO
 {
     if (isset($GLOBALS['__db_server_pdo']) && $GLOBALS['__db_server_pdo'] instanceof PDO) {
@@ -61,14 +81,14 @@ function db_server_pdo(): PDO
     if ($configErrors !== []) {
         $e = new RuntimeException('DB 設定不足: ' . implode(', ', $configErrors));
         db_log_connection_error($cfg, $dsn, $e, $configErrors);
-        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。');
+        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。', 0, $e);
     }
 
     try {
         $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], db_options());
     } catch (Throwable $e) {
         db_log_connection_error($cfg, $dsn, $e);
-        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。');
+        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。', 0, $e);
     }
 
     $GLOBALS['__db_server_pdo'] = $pdo;
@@ -88,14 +108,14 @@ function db_pdo(): PDO
     if ($configErrors !== []) {
         $e = new RuntimeException('DB 設定不足: ' . implode(', ', $configErrors));
         db_log_connection_error($cfg, $dsn, $e, $configErrors);
-        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。');
+        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。', 0, $e);
     }
 
     try {
         $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], db_options());
     } catch (Throwable $e) {
         db_log_connection_error($cfg, $dsn, $e);
-        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。');
+        throw new RuntimeException('DB接続に失敗しました（設定を確認してください）。', 0, $e);
     }
 
     $GLOBALS['__db_pdo'] = $pdo;
@@ -105,6 +125,13 @@ function db_pdo(): PDO
 function db_reset_connections(): void
 {
     unset($GLOBALS['__db_server_pdo'], $GLOBALS['__db_pdo']);
+    db_reset_schema_cache();
+    unset($GLOBALS['__site_settings_cache']);
+}
+
+function db_reset_schema_cache(): void
+{
+    unset($GLOBALS['__db_table_exists'], $GLOBALS['__db_column_exists'], $GLOBALS['__site_settings_columns']);
 }
 
 function db(): PDO
@@ -127,7 +154,10 @@ function db_can_connect(): bool
  */
 function db_table_exists($pdoOrTable, ?string $table = null): bool
 {
-    static $cache = [];
+    $cache = &$GLOBALS['__db_table_exists'];
+    if (!is_array($cache)) {
+        $cache = [];
+    }
 
     try {
         $pdo = $pdoOrTable instanceof PDO ? $pdoOrTable : db();
@@ -137,7 +167,7 @@ function db_table_exists($pdoOrTable, ?string $table = null): bool
         }
 
         $cfg = app_config()['db'];
-        $cacheKey = (string)$cfg['dbname'] . '.' . $tableName;
+        $cacheKey = spl_object_id($pdo) . '.' . (string)$cfg['dbname'] . '.' . $tableName;
         if (array_key_exists($cacheKey, $cache)) {
             return $cache[$cacheKey];
         }
@@ -157,7 +187,10 @@ function db_table_exists($pdoOrTable, ?string $table = null): bool
 
 function db_column_exists(string $table, string $column): bool
 {
-    static $cache = [];
+    $cache = &$GLOBALS['__db_column_exists'];
+    if (!is_array($cache)) {
+        $cache = [];
+    }
 
     if (!preg_match('/\A[a-zA-Z0-9_]+\z/', $table) || !preg_match('/\A[a-zA-Z0-9_]+\z/', $column)) {
         return false;
@@ -165,7 +198,7 @@ function db_column_exists(string $table, string $column): bool
 
     try {
         $cfg = app_config()['db'];
-        $cacheKey = (string)$cfg['dbname'] . '.' . $table . '.' . $column;
+        $cacheKey = spl_object_id(db()) . '.' . (string)$cfg['dbname'] . '.' . $table . '.' . $column;
         if (array_key_exists($cacheKey, $cache)) {
             return $cache[$cacheKey];
         }

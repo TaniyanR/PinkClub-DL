@@ -107,8 +107,27 @@ function site_settings_cache_set(string $key, string $value): void
     $GLOBALS['__site_settings_cache'][$key] = $value;
 }
 
+function site_settings_media_path(string $key): string
+{
+    if (!function_exists('site_media_public_path')) {
+        return '';
+    }
+
+    $mediaKey = match ($key) {
+        'site.logo_path' => 'logo',
+        'site.favicon_path' => 'favicon',
+        default => '',
+    };
+    return $mediaKey !== '' ? site_media_public_path($mediaKey) : '';
+}
+
 function site_setting_get(string $key, string $default = ''): string
 {
+    $mediaPath = site_settings_media_path($key);
+    if ($mediaPath !== '') {
+        return $mediaPath;
+    }
+
     if (site_settings_cache_has($key)) {
         return site_settings_cache_get($key, $default);
     }
@@ -248,4 +267,27 @@ function site_title_setting_set(string $value): void
         'site_title' => $normalized,
         'site_name' => $normalized,
     ]);
+}
+
+function site_start_year(): int
+{
+    $currentYear = (int)date('Y');
+    $configured = filter_var(
+        site_setting_get('site.start_year', ''),
+        FILTER_VALIDATE_INT,
+        ['options' => ['min_range' => 1900, 'max_range' => $currentYear]]
+    );
+    if ($configured !== false) {
+        return $configured;
+    }
+
+    try {
+        $year = (int)db()->query('SELECT YEAR(MIN(created_at)) FROM admins')->fetchColumn();
+        if ($year >= 1900 && $year <= $currentYear) {
+            return $year;
+        }
+    } catch (Throwable) {
+    }
+
+    return $currentYear;
 }

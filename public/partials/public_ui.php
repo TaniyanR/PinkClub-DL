@@ -736,7 +736,7 @@ if (!function_exists('pcf_render_item_card')) {
         if ($sampleMovieUrl !== '') {
             echo '<button type="button" class="pcf-dm-card__button sample-movie-trigger" data-movie-url="' . e($sampleMovieUrl) . '" data-movie-title="' . e($title) . '">サンプル動画</button>';
         } elseif ($sampleFallbackUrl !== '') {
-            echo '<a class="pcf-dm-card__button" href="' . e($sampleFallbackUrl) . '" target="_blank" rel="noopener noreferrer">サンプル動画</a>';
+            echo '<a class="pcf-dm-card__button" href="' . e($sampleFallbackUrl) . '" target="_blank" rel="noopener sponsored nofollow">サンプル動画</a>';
         } else {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル動画</span>';
         }

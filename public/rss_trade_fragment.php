@@ -22,9 +22,12 @@ if (!in_array($type, ['text', 'image', 'bottom'], true)) {
 
 $cacheDir = dirname(__DIR__) . '/storage/cache/rss-fragments';
 $ttl = 180;
-$cacheFile = $cacheDir . '/v3-' . $type . '.html';
-$lockFile = $cacheDir . '/.v3-' . $type . '.lock';
-if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
+$cacheFile = $cacheDir . '/v4-' . $type . '.html';
+$lockFile = $cacheDir . '/.v4-' . $type . '.lock';
+
+if (!is_dir($cacheDir)) {
+    @mkdir($cacheDir, 0775, true);
+}
 
 if (is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $ttl) {
     $cached = @file_get_contents($cacheFile);
@@ -42,11 +45,15 @@ if (!$hasLock && is_file($cacheFile)) {
     if (is_string($stale) && $stale !== '') {
         header('X-PCF-RSS-Fragment: STALE');
         echo $stale;
-        if (is_resource($lock)) fclose($lock);
+        if (is_resource($lock)) {
+            fclose($lock);
+        }
         exit;
     }
 }
-if (is_resource($lock) && !$hasLock) $hasLock = @flock($lock, LOCK_EX);
+if (is_resource($lock) && !$hasLock) {
+    $hasLock = @flock($lock, LOCK_EX);
+}
 
 if (is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $ttl) {
     $cached = @file_get_contents($cacheFile);
@@ -64,13 +71,19 @@ if (is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $ttl) {
 $GLOBALS['pcf_rss_fragment_request'] = true;
 ob_start();
 try {
-    if ($type === 'text') include __DIR__ . '/partials/rss_text_widget.php';
-    elseif ($type === 'image') include __DIR__ . '/partials/rss_image_widget.php';
-    else render_shared_content_ad_row('content_bottom', 'home');
+    if ($type === 'text') {
+        include __DIR__ . '/partials/rss_text_widget.php';
+    } elseif ($type === 'image') {
+        include __DIR__ . '/partials/rss_image_widget.php';
+    } else {
+        render_shared_content_ad_row('content_bottom', 'home');
+    }
     $html = (string)ob_get_clean();
-} catch (Throwable) {
-    if (ob_get_level() > 0) ob_end_clean();
-    error_log('[rss] fragment generation failed');
+} catch (Throwable $e) {
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('[rss] fragment generation failed: ' . $e->getMessage());
     $html = '';
 }
 
@@ -81,13 +94,21 @@ if ($html !== '' && is_dir($cacheDir) && is_writable($cacheDir)) {
         $suffix = uniqid('', true);
     }
     $tmp = $cacheDir . '/.' . basename($cacheFile) . '.' . $suffix . '.tmp';
-    if (@file_put_contents($tmp, $html, LOCK_EX) !== false) @rename($tmp, $cacheFile);
-    else @unlink($tmp);
+    if (@file_put_contents($tmp, $html, LOCK_EX) !== false) {
+        @rename($tmp, $cacheFile);
+    } else {
+        @unlink($tmp);
+    }
 }
+
 if (is_resource($lock)) {
     @flock($lock, LOCK_UN);
     fclose($lock);
 }
-if ($html === '' && is_file($cacheFile)) $html = (string)@file_get_contents($cacheFile);
+
+if ($html === '' && is_file($cacheFile)) {
+    $html = (string)@file_get_contents($cacheFile);
+}
+
 header('X-PCF-RSS-Fragment: MISS');
 echo $html;

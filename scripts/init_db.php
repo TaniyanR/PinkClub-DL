@@ -2,29 +2,33 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../lib/db.php';
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+require_once __DIR__ . '/../lib/bootstrap.php';
 
 function init_db(): array
 {
-    $pdo = db();
-    db_ensure_initialized($pdo);
-
-    $schemaStatements = db_sql_split_statements((string)file_get_contents(db_schema_file_path()));
-    $migrationFiles = glob(__DIR__ . '/../sql/migrations/*.sql');
-    $migrationCount = is_array($migrationFiles) ? count($migrationFiles) : 0;
-
-    return [
-        'source' => 'schema.sql + migrations',
-        'count' => count($schemaStatements) + $migrationCount,
-    ];
+    $result = installer_run();
+    if (($result['success'] ?? false) !== true) {
+        throw new RuntimeException((string)($result['error'] ?? 'セットアップに失敗しました。'));
+    }
+    return $result;
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
     try {
         $result = init_db();
-        fwrite(STDOUT, sprintf("DB初期化が完了しました。（%s: %d）\n", $result['source'], $result['count']));
+        fwrite(STDOUT, sprintf("DB初期化が完了しました。（完了ステップ: %d）\n", count($result['steps'] ?? [])));
+        if (isset($result['initial_credentials']) && is_array($result['initial_credentials'])) {
+            fwrite(STDOUT, '初期管理者: ' . (string)$result['initial_credentials']['username'] . "\n");
+            fwrite(STDOUT, '初期パスワード: ' . (string)$result['initial_credentials']['password'] . "\n");
+            fwrite(STDOUT, "初回ログイン後、個人設定でログインIDとパスワードを変更してください。\n");
+        }
     } catch (Throwable $e) {
         fwrite(STDERR, "DB初期化に失敗しました: " . $e->getMessage() . "\n");
-        throw $e;
+        exit(1);
     }
 }

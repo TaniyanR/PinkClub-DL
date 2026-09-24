@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS fixed_pages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  title VARCHAR(255) NOT NULL,
+  body LONGTEXT NOT NULL,
+  seo_title VARCHAR(255) NULL,
+  seo_description TEXT NULL,
+  is_published TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS duga_sites (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   site_code VARCHAR(50) NOT NULL UNIQUE,
@@ -353,7 +365,8 @@ CREATE TABLE IF NOT EXISTS site_events (
   session_id_hash CHAR(64) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_site_events_type_date (event_type, created_at),
-  INDEX idx_site_events_session_date (session_id_hash, created_at)
+  INDEX idx_site_events_session_date (session_id_hash, created_at),
+  INDEX idx_site_events_pv_dedupe (event_type, session_id_hash, ip_hash, path(160), created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS daily_kpi (

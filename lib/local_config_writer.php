@@ -53,4 +53,8 @@ function local_config_write(array $local): void
     }
 
     @chmod($path, 0640);
+    clearstatcache(true, $path);
+    if (function_exists('opcache_invalidate')) {
+        opcache_invalidate($path, true);
+    }
 }

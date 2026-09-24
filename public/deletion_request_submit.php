@@ -9,27 +9,11 @@ require_once __DIR__ . '/../lib/rate_limit.php';
 function deletion_request_destination_email(): string
 {
     $settingsEmail = setting_admin_email('');
-    if ($settingsEmail !== '' && filter_var($settingsEmail, FILTER_VALIDATE_EMAIL)) {
-        return $settingsEmail;
-    }
-
-    return '';
+    return $settingsEmail !== '' && filter_var($settingsEmail, FILTER_VALIDATE_EMAIL) ? $settingsEmail : '';
 }
 
-function deletion_request_length(string $value): int
+function deletion_request_send_mail(string $to, string $replyTo, string $receipt, string $textBody, string $tmpPath, string $mime, string $extension): bool
 {
-    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
-}
-
-function deletion_request_send_mail(
-    string $to,
-    string $replyTo,
-    string $receipt,
-    string $textBody,
-    string $tmpPath,
-    string $mime,
-    string $extension
-): bool {
     $fileData = @file_get_contents($tmpPath);
     if (!is_string($fileData) || $fileData === '') {
         return false;
@@ -37,21 +21,17 @@ function deletion_request_send_mail(
 
     $boundary = '=_PCF_' . bin2hex(random_bytes(16));
     $subjectText = '【削除依頼】受付番号 ' . $receipt;
-    $subject = function_exists('mb_encode_mimeheader')
-        ? mb_encode_mimeheader($subjectText, 'UTF-8', 'B', "\r\n")
-        : $subjectText;
+    $subject = function_exists('mb_encode_mimeheader') ? mb_encode_mimeheader($subjectText, 'UTF-8', 'B', "\r\n") : $subjectText;
     $safeReplyTo = str_replace(["\r", "\n"], '', $replyTo);
     $attachmentName = 'identity-document-' . preg_replace('/[^A-Za-z0-9_-]/', '', $receipt) . '.' . $extension;
-
     $headers = [
         'MIME-Version: 1.0',
         'Reply-To: ' . $safeReplyTo,
         'Content-Type: multipart/mixed; boundary="' . $boundary . '"',
     ];
     $body = '--' . $boundary . "\r\n"
-        . "Content-Type: text/plain; charset=UTF-8\r\n"
-        . "Content-Transfer-Encoding: base64\r\n\r\n"
-        . chunk_split(base64_encode($textBody), 76, "\r\n") . "\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+        . $textBody . "\r\n\r\n"
         . '--' . $boundary . "\r\n"
         . 'Content-Type: ' . $mime . '; name="' . $attachmentName . '"' . "\r\n"
         . "Content-Transfer-Encoding: base64\r\n"
@@ -73,6 +53,9 @@ try {
     if (!csrf_verify((string)($_POST['_token'] ?? ''))) {
         throw new RuntimeException('リクエストが無効です。');
     }
+    if (!rate_limit_allow('deletion_request', 2, 900)) {
+        throw new RuntimeException('短時間に複数回送信されています。時間をおいて再度お試しください。');
+    }
     if (trim((string)($_POST['website'] ?? '')) !== '') {
         header('Location: ' . $backUrl . '&submitted=1');
         exit;
@@ -88,18 +71,13 @@ try {
     if ($name === '' || $email === '' || $pageUrls === '' || $reason === '') {
         throw new RuntimeException('必須項目を入力してください。');
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || str_contains($email, "\r") || str_contains($email, "\n")) {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new RuntimeException('メールアドレスの形式が正しくありません。');
     }
     if (!$consent) {
         throw new RuntimeException('プライバシーポリシーへの同意が必要です。');
     }
-    if (deletion_request_length($name) > 100
-        || deletion_request_length($email) > 254
-        || deletion_request_length($phone) > 30
-        || deletion_request_length($pageUrls) > 5000
-        || deletion_request_length($reason) > 5000
-    ) {
+    if (mb_strlen($name) > 100 || mb_strlen($email) > 254 || mb_strlen($phone) > 30 || mb_strlen($pageUrls) > 5000 || mb_strlen($reason) > 5000) {
         throw new RuntimeException('入力内容が長すぎます。');
     }
 
@@ -107,11 +85,8 @@ try {
     $validUrlFound = false;
     foreach ($urls as $url) {
         $url = trim((string)$url);
-        if ($url === '') {
-            continue;
-        }
-        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
-        if (!filter_var($url, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) {
+        if ($url === '') continue;
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
             throw new RuntimeException('該当ページURLの形式が正しくありません。');
         }
         $validUrlFound = true;
@@ -132,9 +107,6 @@ try {
     if ($tmp === '' || !is_uploaded_file($tmp)) {
         throw new RuntimeException('アップロードされたファイルを確認できません。');
     }
-    if (!class_exists('finfo')) {
-        throw new RuntimeException('本人確認書類を検証できません。');
-    }
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = (string)$finfo->file($tmp);
@@ -150,9 +122,6 @@ try {
     if ($toEmail === '') {
         throw new RuntimeException('送信先メールアドレスが設定されていません。');
     }
-    if (!rate_limit_allow('deletion_request', 5, 300)) {
-        throw new RuntimeException('5分以内の送信回数が上限（5回）に達しました。5分後に再度お試しください。');
-    }
 
     $receipt = 'DEL-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
     $attachmentName = 'identity-document-' . preg_replace('/[^A-Za-z0-9_-]/', '', $receipt) . '.' . $extensions[$mime];
@@ -164,8 +133,8 @@ try {
         . "電話番号: " . ($phone !== '' ? $phone : '未入力') . "\n\n"
         . "該当ページURL:\n{$pageUrls}\n\n"
         . "申請理由:\n{$reason}\n\n"
-        . "本人確認書類（必須）：添付済み\n"
-        . "添付ファイル：{$attachmentName} ({$attachmentSize})\n"
+        . "本人確認書類（必須）: 添付済み\n"
+        . "添付ファイル: {$attachmentName} ({$attachmentSize})\n"
         . "本人確認書類はサーバーには保存していません。";
 
     if (!deletion_request_send_mail($toEmail, $email, $receipt, $mailBody, $tmp, $mime, $extensions[$mime])) {
@@ -174,10 +143,11 @@ try {
 
     header('Location: ' . $backUrl . '&receipt=' . rawurlencode($receipt));
     exit;
+} catch (RuntimeException $e) {
+    header('Location: ' . $backUrl . '&deletion_error=' . rawurlencode(mb_substr($e->getMessage(), 0, 200)));
+    exit;
 } catch (Throwable $e) {
-    $message = function_exists('mb_substr')
-        ? mb_substr($e->getMessage(), 0, 200, 'UTF-8')
-        : substr($e->getMessage(), 0, 200);
-    header('Location: ' . $backUrl . '&deletion_error=' . rawurlencode($message));
+    error_log('deletion request failed: ' . $e->getMessage());
+    header('Location: ' . $backUrl . '&deletion_error=' . rawurlencode('処理中にエラーが発生しました。時間をおいて再度お試しください。'));
     exit;
 }

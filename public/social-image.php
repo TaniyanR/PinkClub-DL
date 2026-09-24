@@ -6,9 +6,8 @@ require_once __DIR__ . '/partials/public_ui.php';
 require_once __DIR__ . '/../lib/social_image_endpoint.php';
 
 pcf_social_image_run([
-    'service_key' => 'pinkclub-dl',
+    'service_key' => 'pinkclub-duga',
     'allowed_hosts' => ['duga.jp'],
-    'candidate_provider' => static fn(array $item): array => function_exists('pcf_item_image_candidates') ? pcf_item_image_candidates($item) : [],
     'candidate_fields' => ['image_large', 'image_small', 'image_list', 'full_package_url', 'package_image_url', 'main_image_url', 'image_url'],
     'raw_candidate_fields' => ['jacketimage', 'packageimagelarge', 'packageimage', 'package', 'jacket', 'packageImage', 'poster', 'posterimage', 'imageURL'],
     'referer' => 'https://duga.jp/',

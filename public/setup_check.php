@@ -7,11 +7,6 @@ require_once __DIR__ . '/../lib/local_config_writer.php';
 
 $dbConfigError = null;
 $dbConfigNotice = null;
-$setupInitialPassword = null;
-if (isset($_SESSION['setup_initial_password_once']) && is_string($_SESSION['setup_initial_password_once'])) {
-    $setupInitialPassword = $_SESSION['setup_initial_password_once'];
-    unset($_SESSION['setup_initial_password_once']);
-}
 
 function setup_normalize_local_db(array $db): array
 {
@@ -63,21 +58,7 @@ function setup_local_config_status(): array
 
 function setup_safe_db_error(string $stage, Throwable $exception): string
 {
-    $message = $exception->getMessage();
-    if (!extension_loaded('pdo_mysql')) {
-        return $stage . 'に失敗しました。PDO MySQL拡張が有効ではない可能性があります。';
-    }
-    if (str_contains($message, 'Unknown database')) {
-        return $stage . 'に失敗しました。DBサーバーには接続できましたが、対象DBへ接続できません。DB名が存在しない可能性があります。';
-    }
-    if (str_contains($message, 'Access denied')) {
-        return $stage . 'に失敗しました。ユーザー名またはパスワードが違う、またはDBユーザーが対象DBに追加されていない可能性があります。';
-    }
-    if (str_contains($message, 'Connection refused') || str_contains($message, 'No such file or directory') || str_contains($message, 'timed out')) {
-        return $stage . 'に失敗しました。MySQLサーバーへ接続できません。DBホスト名、DBポート、MySQLサーバーの稼働状況を確認してください。';
-    }
-
-    return $stage . 'に失敗しました。DBホスト名、DBポート、データベース、ユーザー名、パスワードを確認してください。';
+    return $stage . 'に失敗しました。' . db_connection_error_message($exception);
 }
 
 function setup_test_db_config(array $db): void
@@ -90,13 +71,6 @@ function setup_test_db_config(array $db): void
     $charset = (string)($db['charset'] ?? 'utf8mb4');
 
     try {
-        $serverDsn = sprintf('mysql:host=%s;port=%d;charset=%s', $host, $port, $charset);
-        new PDO($serverDsn, $user, $pass, db_options());
-    } catch (Throwable $exception) {
-        throw new RuntimeException(setup_safe_db_error('DBサーバー接続テスト', $exception), 0, $exception);
-    }
-
-    try {
         $dbDsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $host, $port, $dbname, $charset);
         new PDO($dbDsn, $user, $pass, db_options());
     } catch (Throwable $exception) {
@@ -105,6 +79,19 @@ function setup_test_db_config(array $db): void
 }
 
 $localConfigStatus = setup_local_config_status();
+
+// 稼働済みサイトでは、未認証の設定変更をPOST処理より先に拒否する。
+$configuredDb = app_config()['db'] ?? [];
+if (is_array($configuredDb) && db_validate_config($configuredDb, true) === []) {
+    try {
+        if ((installer_status()['completed'] ?? false) === true) {
+            app_redirect(LOGIN_PATH);
+        }
+    } catch (Throwable) {
+        // DBが未完成または停止中なら、下の診断・復旧画面を表示する。
+    }
+}
+
 $csrfFailed = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify(post('_csrf'))) {
     unset($_SESSION['_csrf']);
@@ -116,18 +103,11 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
     try {
         $setupResult = installer_run();
         if (($setupResult['success'] ?? false) === true) {
-            $generated = $setupResult['initial_password'] ?? null;
-            if (is_string($generated) && $generated !== '') {
-                $setupInitialPassword = $generated;
-                $dbConfigNotice = 'セットアップが完了しました。下記の初期認証情報を控えてください。';
-            } else {
-                app_redirect(LOGIN_PATH);
-            }
-        } else {
-            $dbConfigError = (string)($setupResult['error'] ?? 'セットアップに失敗しました。サーバーのエラーログを確認してください。');
+            app_redirect(LOGIN_PATH);
         }
-    } catch (Throwable) {
-        $dbConfigError = 'セットアップに失敗しました。MySQL情報とサーバー設定を確認してください。';
+        $dbConfigError = (string)($setupResult['error'] ?? 'セットアップに失敗しました。install.log を確認してください。');
+    } catch (Throwable $exception) {
+        $dbConfigError = 'セットアップに失敗しました。MySQL情報と logs/install.log を確認してください。';
     }
 }
 
@@ -137,7 +117,7 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
     $dbname = trim((string)post('db_name', ''));
     $user = trim((string)post('db_user', ''));
     $pass = (string)post('db_pass', '');
-    if ($host === '' || $port <= 0 || $dbname === '' || $user === '') {
+    if ($host === '' || $port <= 0 || $port > 65535 || $dbname === '' || $user === '') {
         $dbConfigError = 'DBホスト名、DBポート、データベース、ユーザー名を入力してください。';
     } elseif ($host !== 'localhost' && str_contains($dbname, '_') && $host === strtok($dbname, '_')) {
         $dbConfigError = 'DBホスト名にサーバーIDが入力されています。DBホスト名は通常 localhost です。';
@@ -177,7 +157,7 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
             if ($dbConfigError === null) {
                 $dbConfigError = str_starts_with($exception->getMessage(), 'DB')
                     ? $exception->getMessage()
-                    : 'DB接続設定の保存に失敗しました。入力内容を確認してください。';
+                    : 'DB接続設定の保存に失敗しました: ' . $exception->getMessage();
             }
         }
     }
@@ -188,7 +168,7 @@ $currentDbConfig = $localConfigStatus['loaded'] && is_array($localConfigStatus['
     ? array_replace(app_config()['db'] ?? [], array_intersect_key($localConfigStatus['db'], app_config()['db'] ?? []))
     : (app_config()['db'] ?? []);
 if (($localConfigStatus['error'] ?? null) !== null) {
-    $dbConfigError = '設定ファイルを読み込めません。ファイル権限を確認してください。';
+    $dbConfigError = 'config.local.php の読み込みに失敗しました: ' . (string)$localConfigStatus['error'];
 }
 
 if (!$csrfFailed && $dbConfigError !== null && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -202,7 +182,7 @@ if (!$csrfFailed && $dbConfigError !== null && $_SERVER['REQUEST_METHOD'] === 'P
 $configErrors = db_validate_config($currentDbConfig, true);
 if ($configErrors === []) {
     $status = installer_status();
-    if (($status['completed'] ?? false) === true && $setupInitialPassword === null) {
+    if (($status['completed'] ?? false) === true) {
         app_redirect(LOGIN_PATH);
     }
 } else {
@@ -215,11 +195,12 @@ $checks = [
     '対象DB接続' => $status['db_connection'] ?? false,
     'admins テーブル' => $status['admins_table'] ?? false,
     'settings テーブル' => $status['settings_table'] ?? false,
-    '管理者アカウント' => $status['admin_user'] ?? false,
+    '初期管理者 admin' => $status['admin_user'] ?? false,
     'settings(installer.ready=1)' => $status['settings_row'] ?? false,
 ];
 
 $errorSummary = installer_last_error_summary();
+$logTail = installer_log_tail(30);
 csrf_token();
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
 $faviconUrl = $faviconPath !== '' ? public_url($faviconPath) : '';
@@ -230,7 +211,6 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
   <title><?= e(APP_NAME) ?> セットアップ確認</title>
   <?php if ($faviconUrl !== ''): ?>
     <link rel="icon" href="<?= e($faviconUrl) ?>" sizes="any" type="<?= e($faviconType) ?>">
@@ -245,15 +225,6 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
       <h1><?= e(APP_NAME) ?> セットアップ確認</h1>
       <div class="alert alert-warning">セットアップ失敗時の診断ページです。DB設定保存後またはDBを空にした後は、この画面の「セットアップを実行する」から再実行できます。</div>
 
-      <?php if ($setupInitialPassword !== null): ?>
-        <div class="alert alert-warning" role="status">
-          <h2>セットアップ完了</h2>
-          <p>初期ログインID: <strong>admin</strong></p>
-          <p>初期パスワード: <strong><?= e($setupInitialPassword) ?></strong></p>
-          <p>このパスワードはこの画面で一度だけ表示されます。再読み込みすると表示されません。ログイン後、個人設定でログインID・再設定用メールアドレス・12文字以上の新しいパスワードを設定してください。</p>
-          <p><a href="<?= e(public_url('login0718.php')) ?>">管理画面へログインする</a></p>
-        </div>
-      <?php endif; ?>
 
       <h2>DB接続設定</h2>
       <div class="alert alert-warning">サーバーパネルに表示されるMySQL情報を入力してください。接続テストに成功した場合のみ保存します。</div>
@@ -268,7 +239,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         <input type="hidden" name="action" value="save_db_config">
         <table><tbody>
           <tr><th>DBホスト名</th><td><input name="db_host" value="<?= e((string)($currentDbConfig['host'] ?? '')) ?>" required><br><small>通常 <code>localhost</code> です。サーバーIDではありません。</small></td></tr>
-          <tr><th>DBポート</th><td><input name="db_port" type="number" value="<?= e((string)($currentDbConfig['port'] ?? 3306)) ?>" required></td></tr>
+          <tr><th>DBポート</th><td><input name="db_port" type="number" min="1" max="65535" value="<?= e((string)($currentDbConfig['port'] ?? 3306)) ?>" required></td></tr>
           <tr><th>データベース</th><td><input name="db_name" value="<?= e((string)($currentDbConfig['dbname'] ?? '')) ?>" required></td></tr>
           <tr><th>ユーザー名</th><td><input name="db_user" value="<?= e((string)($currentDbConfig['user'] ?? '')) ?>" required><br><small>サーバーパネルのMySQL設定で、このユーザーを対象データベースに追加してください。</small></td></tr>
           <tr><th>パスワード</th><td><input name="db_pass" type="password" value="" autocomplete="new-password"><br><small>保存済みの場合、空欄のまま保存すると既存値を維持します。</small></td></tr>
@@ -276,7 +247,8 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         <p><button type="submit">DB設定を保存する</button></p>
       </form>
 
-      <?php if ($configErrors === [] && $setupInitialPassword === null): ?>
+
+      <?php if ($configErrors === []): ?>
         <h2>セットアップ実行</h2>
         <div class="alert alert-warning">DBを削除・空にした後は、このボタンで <code>sql/schema.sql</code> と <code>sql/migrations/*.sql</code> をファイル名順に自動適用します。</div>
         <form method="post">
@@ -295,13 +267,25 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
         </tbody>
       </table>
 
+      <h2>直近エラー要約</h2>
       <?php if (is_array($errorSummary)): ?>
-        <h2>直近エラー要約</h2>
         <table><tbody>
           <tr><th>時刻</th><td><?= e((string)($errorSummary['time'] ?? '-')) ?></td></tr>
           <tr><th>ステップ</th><td><?= e((string)($errorSummary['step'] ?? '-')) ?></td></tr>
-          <tr><th>状態</th><td>セットアップ処理でエラーが記録されています。詳細は公開画面へ表示せず、サーバー管理者がログで確認してください。</td></tr>
+          <tr><th>例外クラス</th><td><?= e((string)($errorSummary['class'] ?? '-')) ?></td></tr>
+          <tr><th>メッセージ</th><td><?= e((string)($errorSummary['message'] ?? '-')) ?></td></tr>
+          <tr><th>発生箇所</th><td><?= e((string)($errorSummary['file'] ?? '-')) ?>:<?= e((string)($errorSummary['line'] ?? '-')) ?></td></tr>
+          <tr><th>失敗SQL</th><td><pre><?= e((string)($errorSummary['failed_sql'] ?? '取得なし')) ?></pre></td></tr>
         </tbody></table>
+      <?php else: ?>
+        <p>直近エラー要約はありません。</p>
+      <?php endif; ?>
+
+      <h2>install.log 末尾30行</h2>
+      <?php if (($logTail['error'] ?? null) !== null): ?>
+        <div class="alert alert-warning"><?= e((string)$logTail['error']) ?></div>
+      <?php else: ?>
+        <pre><?php foreach (($logTail['lines'] ?? []) as $line): ?><?= e((string)$line) . "\n" ?><?php endforeach; ?></pre>
       <?php endif; ?>
 
       <p><a href="<?= e(public_url('login0718.php')) ?>">ログイン画面へ戻る</a></p>

@@ -2,64 +2,127 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../../lib/seo_metadata.php';
 
 $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home';
 $safeTextSetting = static function (string $key, string $default = ''): string {
-    if (function_exists('front_safe_text_setting')) return front_safe_text_setting($key, $default);
-    try {
-        if (function_exists('setting')) { $value = setting($key, $default); return is_string($value) ? $value : $default; }
-        if (function_exists('app_setting_get')) { $value = app_setting_get($key, $default); return is_string($value) ? $value : $default; }
-    } catch (Throwable $e) {
-        if (function_exists('app_log_error')) app_log_error('header safe text setting fallback failed: ' . $key, $e);
+    if (function_exists('front_safe_text_setting')) {
+        return front_safe_text_setting($key, $default);
     }
+
+    try {
+        if (function_exists('setting')) {
+            $value = setting($key, $default);
+            return is_string($value) ? $value : $default;
+        }
+        if (function_exists('app_setting_get')) {
+            $value = app_setting_get($key, $default);
+            return is_string($value) ? $value : $default;
+        }
+    } catch (Throwable $e) {
+        if (function_exists('app_log_error')) {
+            app_log_error('header safe text setting fallback failed: ' . $key, $e);
+        }
+    }
+
     return $default;
+};
+$conformEmbeddedHtml = static function (string $html): string {
+    $html = preg_replace('/\s+type\s*=\s*(["\'])text\/javascript\1/i', '', $html) ?? $html;
+
+    return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
+        $tag = (string)($match[0] ?? '');
+        if ($tag === '' || preg_match('/\balt\s*=/i', $tag) === 1) {
+            return $tag;
+        }
+        return preg_replace('/\s*\/?>$/', ' alt="">', $tag) ?? $tag;
+    }, $html) ?? $html;
 };
 
 $siteName = trim($safeTextSetting('site_name', ''));
-if ($siteName === '') $siteName = trim($safeTextSetting('site.title', ''));
-if ($siteName === '') $siteName = 'PinkClub-DL';
+if ($siteName === '') {
+    $siteName = trim($safeTextSetting('site.title', ''));
+}
+if ($siteName === '') {
+    $siteName = 'PinkClub-DL';
+}
+
 $tagline = trim($safeTextSetting('site.tagline', ''));
 $keywords = trim($safeTextSetting('site.keywords', ''));
 $logoPath = trim($safeTextSetting('site.logo_path', ''));
 $faviconPath = trim($safeTextSetting('site.favicon_path', ''));
-$headerAdHtml = trim($safeTextSetting('header_ad_html', ''));
-$customHeadCode = trim($safeTextSetting('site.custom_head_code', ''));
-$customBodyOpenCode = trim($safeTextSetting('site.custom_body_open_code', ''));
+
+$headerAdHtml = $conformEmbeddedHtml(trim($safeTextSetting('header_ad_html', '')));
+$customHeadCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_head_code', '')));
+$customBodyOpenCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_body_open_code', '')));
 $titleText = (string)($title ?? $pageTitle ?? $siteName);
 $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
 $titleText = $isHomeTitle ? ($tagline !== '' ? $siteName . ' - ' . $tagline : $siteName) : $titleBaseText . ' | ' . $siteName;
-$logoUrl = $logoPath !== '' ? public_url($logoPath) : '';
-$faviconUrl = '';
-if ($faviconPath !== '') {
-    $faviconRelativePath = ltrim($faviconPath, '/');
-    if (str_starts_with($faviconRelativePath, 'uploads/site_settings/')) $faviconRelativePath = 'public/' . $faviconRelativePath;
-    $faviconUrl = public_url($faviconRelativePath);
-    $faviconFile = __DIR__ . '/../' . ltrim($faviconPath, '/');
-    if (is_file($faviconFile)) $faviconUrl .= (str_contains($faviconUrl, '?') ? '&' : '?') . 'v=' . rawurlencode((string)filemtime($faviconFile));
-}
+$logoUrl = function_exists('site_media_url_or_legacy')
+    ? site_media_url_or_legacy('logo', $logoPath)
+    : ($logoPath !== '' ? public_url($logoPath) : '');
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
 $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
 $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
+if (function_exists('site_media_meta_get')) {
+    $faviconMedia = site_media_meta_get('favicon');
+    if (is_array($faviconMedia) && trim((string)($faviconMedia['mime_type'] ?? '')) !== '') {
+        $faviconType = trim((string)$faviconMedia['mime_type']);
+    }
+}
 $canRenderAd = function_exists('render_ad');
 $descriptionText = (string)($pageDescription ?? '');
-if ($descriptionText === '') $descriptionText = $tagline;
+if ($descriptionText === '') {
+    $descriptionText = $tagline;
+}
+$headerScriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+$descriptionText = pcf_meta_description($descriptionText, $titleBaseText !== '' ? $titleBaseText : $siteName, $headerScriptName, $siteName);
 $canonicalHref = isset($canonicalUrl) && is_string($canonicalUrl) && $canonicalUrl !== '' ? $canonicalUrl : '';
 $ogUrl = isset($ogUrl) && is_string($ogUrl) && $ogUrl !== '' ? $ogUrl : ($canonicalHref !== '' ? $canonicalHref : public_url(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'index.php'))));
 $ogType = isset($ogType) && is_string($ogType) && $ogType !== '' ? $ogType : 'website';
 $ogImage = isset($ogImage) && is_string($ogImage) ? trim($ogImage) : '';
-if ($ogImage === '' && $logoPath !== '') $ogImage = $logoUrl;
-if ($ogImage !== '' && !str_starts_with($ogImage, 'http://') && !str_starts_with($ogImage, 'https://') && !str_starts_with($ogImage, '/')) $ogImage = asset_url($ogImage);
-$headerScriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-$itemIdForSocial = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-if ($headerScriptName === 'item.php' && is_int($itemIdForSocial) && $itemIdForSocial > 0) {
-    $ogImage = public_url('social-image.php?id=' . $itemIdForSocial . '&v=3');
+if ($ogImage === '' && $logoPath !== '') {
+    $ogImage = $logoUrl;
 }
-$ogImageAlt = trim($titleBaseText !== '' ? $titleBaseText : $siteName);
+if (str_starts_with($ogImage, '//')) {
+    $baseScheme = strtolower((string)(parse_url(BASE_URL, PHP_URL_SCHEME) ?: 'https'));
+    $ogImage = ($baseScheme === 'http' ? 'http:' : 'https:') . $ogImage;
+} elseif (str_starts_with($ogImage, '/')) {
+    $ogImage = app_url($ogImage);
+} elseif ($ogImage !== '' && !str_starts_with($ogImage, 'http://') && !str_starts_with($ogImage, 'https://')) {
+    $ogImage = asset_url($ogImage);
+}
+$socialImageItemId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if ($headerScriptName === 'item.php' && is_int($socialImageItemId) && $socialImageItemId > 0) {
+    $ogImage = public_url('social-image.php') . '?id=' . rawurlencode((string)$socialImageItemId) . '&v=3';
+}
 $jsonLdText = isset($jsonLd) && is_string($jsonLd) && $jsonLd !== '' ? $jsonLd : '';
-if ($ogImage !== '' && $jsonLdText !== '') {
+if ($jsonLdText !== '') {
     $jsonLdData = json_decode($jsonLdText, true);
     if (is_array($jsonLdData) && (string)($jsonLdData['@type'] ?? '') === 'Product') {
-        $jsonLdData['image'] = $ogImage;
+        if ($ogImage !== '') {
+            $jsonLdData['image'] = $ogImage;
+        }
+        $offers = $jsonLdData['offers'] ?? null;
+        if (is_array($offers)) {
+            $hasOfferPrice = isset($offers['price']) && is_numeric($offers['price']);
+            $hasSpecificationPrice = isset($offers['priceSpecification']['price']) && is_numeric($offers['priceSpecification']['price']);
+            if (!$hasOfferPrice && !$hasSpecificationPrice) {
+                $priceMin = isset($item) && is_array($item) ? trim((string)($item['price_min'] ?? '')) : '';
+                if ($priceMin !== '' && is_numeric($priceMin) && (float)$priceMin > 0) {
+                    $jsonLdData['offers']['price'] = (float)$priceMin;
+                } else {
+                    unset($jsonLdData['offers']);
+                }
+            }
+        }
+        if (isset($item) && is_array($item)) {
+            $sku = trim((string)($item['content_id'] ?? $item['product_id'] ?? ''));
+            if ($sku !== '') {
+                $jsonLdData['sku'] = $sku;
+            }
+        }
         $encodedJsonLd = json_encode($jsonLdData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
         if (is_string($encodedJsonLd)) {
             $jsonLdText = $encodedJsonLd;
@@ -74,6 +137,8 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="rating" content="adult">
   <title><?= e($titleText) ?></title>
   <?php if ($descriptionText !== ''): ?><meta name="description" content="<?= e($descriptionText) ?>"><?php endif; ?>
   <?php if (isset($robotsMeta) && is_string($robotsMeta) && trim($robotsMeta) !== ''): ?><meta name="robots" content="<?= e(trim($robotsMeta)) ?>"><?php endif; ?>
@@ -88,7 +153,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   <?php if ($ogImage !== ''): ?>
   <meta property="og:image" content="<?= e($ogImage) ?>">
   <?php if (str_starts_with($ogImage, 'https://')): ?><meta property="og:image:secure_url" content="<?= e($ogImage) ?>"><?php endif; ?>
-  <meta property="og:image:alt" content="<?= e($ogImageAlt) ?>">
+  <meta property="og:image:alt" content="<?= e($titleText) ?>">
   <?php endif; ?>
   <meta property="og:site_name" content="<?= e($siteName) ?>">
   <meta property="og:locale" content="ja_JP">
@@ -97,7 +162,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   <?php if ($descriptionText !== ''): ?><meta name="twitter:description" content="<?= e($descriptionText) ?>"><?php endif; ?>
   <?php if ($ogImage !== ''): ?>
   <meta name="twitter:image" content="<?= e($ogImage) ?>">
-  <meta name="twitter:image:alt" content="<?= e($ogImageAlt) ?>">
+  <meta name="twitter:image:alt" content="<?= e($titleText) ?>">
   <?php endif; ?>
   <?php if ($jsonLdText !== ''): ?><script type="application/ld+json"><?= $jsonLdText ?></script><?php endif; ?>
   <?php if ($customHeadCode !== ''): ?>
@@ -111,33 +176,87 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   <link rel="stylesheet" href="<?= e(asset_url('css/style.css')) ?>">
   <link rel="stylesheet" href="<?= e(asset_url('css/public-ui.css')) ?>">
   <link rel="stylesheet" href="<?= e(asset_url('css/sample-image-modal.css')) ?>">
-  <script src="<?= e(asset_url('js/item-detail-fixes.js')) ?>" defer></script>
   <script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     const vrPattern = /(?:【|\[|［)?\s*VR\s*(?:】|\]|］)?/i;
-    const enableImageFallbacks = (root = document) => {
-      root.querySelectorAll('img[data-image-fallbacks]').forEach((img) => {
-        if (img.dataset.imageFallbackReady === '1') return;
-        let fallbacks = [];
-        try { const parsed = JSON.parse(img.dataset.imageFallbacks || '[]'); if (Array.isArray(parsed)) fallbacks = parsed.map((url) => String(url || '').trim()).filter(Boolean); } catch (_) { fallbacks = []; }
-        img.dataset.imageFallbackReady = '1'; if (!fallbacks.length) return; let index = 0;
-        const useNextFallback = () => { while (index < fallbacks.length && fallbacks[index] === img.currentSrc) index += 1; if (index >= fallbacks.length) return; const nextUrl = fallbacks[index++]; img.src = nextUrl; const link = img.closest('a[href]'); if (link && img.matches('[data-package-image="1"]')) link.href = nextUrl; };
-        img.addEventListener('error', useNextFallback); if (img.complete && img.naturalWidth === 0) useNextFallback();
-      });
+
+    const itemIdFromLink = (link) => {
+      try {
+        const url = new URL(link.href, window.location.href);
+        if (!/\/item\.php$/i.test(url.pathname)) return '';
+        const id = url.searchParams.get('id') || '';
+        return /^\d+$/.test(id) ? id : '';
+      } catch (_) {
+        return '';
+      }
     };
-    const itemIdFromLink = (link) => { try { const url = new URL(link.href, window.location.href); if (!/\/item\.php$/i.test(url.pathname)) return ''; const id = url.searchParams.get('id') || ''; return /^\d+$/.test(id) ? id : ''; } catch (_) { return ''; } };
+
     const convertVrCards = (root = document) => {
       root.querySelectorAll('a[href*="item.php"]').forEach((itemLink) => {
-        const itemId = itemIdFromLink(itemLink); if (!itemId) return; const card = itemLink.closest('.pcf-dm-card, .rail-card, article'); if (!card || card.dataset.vrAffiliateReady === '1') return;
-        const titleNode = card.querySelector('.pcf-dm-card__title, .rail-card__title, h2, h3, h4'); const title = (titleNode?.textContent || '').trim(); if (!vrPattern.test(title)) return;
-        const movieControl = Array.from(card.querySelectorAll('button, span, a')).find((node) => (node.textContent || '').trim() === 'サンプル動画'); if (!movieControl) return;
-        const link = document.createElement('a'); link.className = movieControl.className.replace(/\bis-disabled\b/g, '').replace(/\bsample-button--disabled\b/g, '').trim(); link.classList.add('sample-button--enabled'); link.href = `<?= e(public_url('vr_affiliate.php')) ?>?id=${encodeURIComponent(itemId)}`; link.target = '_blank'; link.rel = 'noopener noreferrer sponsored'; link.textContent = '元サイトで見る'; link.setAttribute('aria-label', `${title}をDUGAで見る`); link.style.display = 'flex'; link.style.alignItems = 'center'; link.style.justifyContent = 'center'; link.style.textDecoration = 'none'; movieControl.replaceWith(link); card.dataset.vrAffiliateReady = '1';
+        const itemId = itemIdFromLink(itemLink);
+        if (!itemId) return;
+        const card = itemLink.closest('.pcf-dm-card, .rail-card, article');
+        if (!card || card.dataset.vrAffiliateReady === '1') return;
+        const titleNode = card.querySelector('.pcf-dm-card__title, .rail-card__title, h2, h3, h4');
+        const title = (titleNode?.textContent || '').trim();
+        if (!vrPattern.test(title)) return;
+        const movieControl = Array.from(card.querySelectorAll('button, span, a'))
+          .find((node) => (node.textContent || '').trim() === 'サンプル動画');
+        if (!movieControl) return;
+        const link = document.createElement('a');
+        link.className = movieControl.className.replace(/\bis-disabled\b/g, '').replace(/\bsample-button--disabled\b/g, '').trim();
+        link.classList.add('sample-button--enabled');
+        link.href = `<?= e(public_url('vr_affiliate.php')) ?>?id=${encodeURIComponent(itemId)}`;
+        link.target = '_blank';
+        link.rel = 'noopener sponsored nofollow';
+        link.textContent = '元サイトで見る';
+        link.setAttribute('aria-label', `${title}をDUGAで見る`);
+        link.style.display = 'flex';
+        link.style.alignItems = 'center';
+        link.style.justifyContent = 'center';
+        link.style.textDecoration = 'none';
+        movieControl.replaceWith(link);
+        card.dataset.vrAffiliateReady = '1';
       });
     };
-    const replaceVrNoMovieWithPackage = () => { if (!/\/item\.php$/i.test(window.location.pathname)) return; const title = (document.querySelector('h1')?.textContent || document.title || '').trim(); if (!vrPattern.test(title)) return; const movieArea = document.querySelector('.pcf-item-sample-movie'); const packageImage = document.querySelector('img[data-package-image="1"]'); if (!movieArea || !packageImage) return; const image = packageImage.cloneNode(true); image.removeAttribute('data-package-image'); image.removeAttribute('loading'); image.style.width = '100%'; image.style.height = '100%'; image.style.objectFit = 'contain'; image.style.display = 'block'; movieArea.replaceChildren(image); movieArea.style.background = '#fff'; movieArea.style.color = ''; };
-    enableImageFallbacks(); convertVrCards(); replaceVrNoMovieWithPackage();
-    const observer = new MutationObserver((mutations) => { mutations.forEach((mutation) => { mutation.addedNodes.forEach((node) => { if (!(node instanceof Element)) return; enableImageFallbacks(node); if (node.matches('a[href*="item.php"]')) { convertVrCards(node.parentElement || node); return; } convertVrCards(node); }); }); });
+
+    const replaceVrNoMovieWithPackage = () => {
+      if (!/\/item\.php$/i.test(window.location.pathname)) return;
+      const title = (document.querySelector('h1')?.textContent || document.title || '').trim();
+      if (!vrPattern.test(title)) return;
+
+      const movieArea = document.querySelector('.pcf-item-sample-movie');
+      const packageImage = document.querySelector('img[data-package-image="1"]');
+      if (!movieArea || !packageImage) return;
+
+      const image = packageImage.cloneNode(true);
+      image.removeAttribute('data-package-image');
+      image.removeAttribute('loading');
+      image.style.width = '100%';
+      image.style.height = '100%';
+      image.style.objectFit = 'contain';
+      image.style.display = 'block';
+      movieArea.replaceChildren(image);
+      movieArea.style.background = '#fff';
+      movieArea.style.color = '';
+    };
+
+    convertVrCards();
+    replaceVrNoMovieWithPackage();
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (!(node instanceof Element)) return;
+          if (node.matches('a[href*="item.php"]')) {
+            convertVrCards(node.parentElement || node);
+            return;
+          }
+          convertVrCards(node);
+        });
+      });
+    });
     observer.observe(document.body, { childList: true, subtree: true });
   });
   </script>
@@ -150,27 +269,43 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
   <div class="site-header__top">
     <div class="header-left site-header__left">
       <?php if ($logoPath !== ''): ?>
-        <div class="site-logo-wrap"><a href="<?= e(public_url('')) ?>" class="site-title-link"><img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" class="site-logo"></a></div>
+        <div class="site-logo-wrap">
+          <a href="<?= e(public_url('')) ?>" class="site-title-link"><img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" class="site-logo" decoding="async"></a>
+        </div>
       <?php else: ?>
         <div class="site-title"><a href="<?= e(public_url('')) ?>" class="site-title-link"><?= e($siteName) ?></a></div>
       <?php endif; ?>
+      <div class="site-disclaimer"><strong>18+：当サイトはアダルトサイトで18歳未満の方はご利用出来ません。</strong></div>
       <div class="site-disclaimer"><strong>当サイトはアフィリエイト広告を利用しています。</strong></div>
     </div>
     <div class="header-right site-header__right">
-      <?php if ($headerAdHtml !== '') : ?><div class="site-ad"><?= $headerAdHtml ?></div>
-      <?php elseif ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?><div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div><?php endif; ?>
+      <?php if ($headerAdHtml !== '') : ?>
+        <div class="site-ad"><?= $headerAdHtml ?></div>
+      <?php elseif ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
+        <div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div>
+      <?php endif; ?>
     </div>
   </div>
+
   <?php require __DIR__ . '/nav_search.php'; ?>
 </header>
-<?php if ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('sp_header_below', $pageType, 'sp'))): ?><div class="only-sp site-ad"><?php render_ad('sp_header_below', $pageType, 'sp'); ?></div><?php endif; ?>
-<?php if (site_setting_get('link.rss_display.sp_header_below', '1') === '1'): ?><div class="site-main__rss only-sp"><?php render_shared_mobile_rss_widget(); ?></div><?php endif; ?>
+<?php if ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('sp_header_below', $pageType, 'sp'))): ?>
+<div class="only-sp site-ad"><?php render_ad('sp_header_below', $pageType, 'sp'); ?></div>
+<?php endif; ?>
+<?php if (site_setting_get('link.rss_display.sp_header_below', '1') === '1'): ?>
+<div class="site-main__rss only-sp">
+  <?php render_shared_mobile_rss_widget(); ?>
+</div>
+<?php endif; ?>
 <div class="layout site-layout">
   <?php require __DIR__ . '/sidebar.php'; ?>
   <main class="content site-main site-main--legacy">
     <?php $scriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')); ?>
     <?php $autoBreadcrumbSkip = ['item.php']; ?>
     <?php if ($scriptName !== 'index.php' && !in_array($scriptName, $autoBreadcrumbSkip, true)): ?>
-      <nav class="pcf-breadcrumb" aria-label="パンくず"><span class="pcf-breadcrumb__item"><a href="<?= e(public_url('')) ?>">ホーム</a></span><span class="pcf-breadcrumb__item"><?= e($titleText) ?></span></nav>
+      <nav class="pcf-breadcrumb" aria-label="パンくず">
+        <span class="pcf-breadcrumb__item"><a href="<?= e(public_url('')) ?>">ホーム</a></span>
+        <span class="pcf-breadcrumb__item"><?= e($titleText) ?></span>
+      </nav>
     <?php endif; ?>
     <div class="site-main__body">

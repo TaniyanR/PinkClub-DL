@@ -384,6 +384,7 @@ function search_fetch_items(string $query, int $limit, int $offset, string $exac
         }
         $whereSql = '(' . implode(' OR ', $termWhere) . ')';
     }
+    $whereSql = '(' . $whereSql . ') AND ' . items_front_release_where();
     $orderSqlCandidates = [
         'release_date DESC, id DESC',
         'date_published DESC, id DESC',
@@ -477,7 +478,7 @@ $searchRankingTabUrlBuilder = static function (string $period) use ($searchQuery
 };
 $searchRankingRowUrlBuilder = static function (array $row): string {
     $itemId = (int)($row['id'] ?? 0);
-    return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
+    return $itemId > 0 ? public_url('item.php?id=' . $itemId) : '';
 };
 
 $title = '検索結果';

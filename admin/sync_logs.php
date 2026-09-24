@@ -21,7 +21,7 @@ function sync_log_hint(array $log): string
         return 'APIへの通信に失敗しています。API設定、サーバーの外部通信、ネットワーク状態を確認してください。';
     }
     if (strpos($message, 'HTTPステータス') !== false || strpos($message, 'status') !== false) {
-        return 'APIから正常以外の応答が返っています。アプリケーションID、代理店ID、リクエスト条件を確認してください。';
+        return 'APIから正常以外の応答が返っています。API ID、アフィリエイトID、リクエスト条件を確認してください。';
     }
     if (strpos($message, 'JSON') !== false || strpos($message, 'パース') !== false) {
         return 'API応答の読み取りに失敗しています。応答抜粋がある場合は内容を確認してください。';

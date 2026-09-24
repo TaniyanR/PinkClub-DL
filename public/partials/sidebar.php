@@ -7,6 +7,10 @@ require_once __DIR__ . '/../../lib/app_features.php';
 require_once __DIR__ . '/../../lib/contact_page_slug.php';
 require_once __DIR__ . '/_helpers.php';
 
+if (function_exists('pcf_public_request_is_mobile') && pcf_public_request_is_mobile()) {
+    return;
+}
+
 $sortMode = site_setting_get('link.sort_mode', 'registered');
 $orderBy = $sortMode === 'kana' ? 'ps.name ASC, ps.id ASC' : 'ps.id DESC';
 $canRenderAd = function_exists('render_ad');
@@ -22,16 +26,14 @@ $defaultFixedPages = [
 ];
 
 try {
-    $sourceWhere = function_exists('items_product_source_where') ? items_product_source_where() : '';
-    $sourceWhereSql = $sourceWhere !== '' ? ' WHERE ' . $sourceWhere : '';
-    $publishedItemCount = (int)db()->query('SELECT COUNT(*) FROM items' . $sourceWhereSql)->fetchColumn();
-    $sitePostCount = max(0, $publishedItemCount);
+    $sitePostCount = (int)db()->query('SELECT COUNT(*) FROM items')->fetchColumn();
 } catch (Throwable) {
     $sitePostCount = null;
 }
 
 try {
-    $stmt = db()->query("SELECT ps.id, ps.name, ps.url, COALESCE(ps.show_link, ps.is_enabled, 1) AS show_link FROM partner_sites ps WHERE COALESCE(ps.show_link, ps.is_enabled, 1) = 1 ORDER BY {$orderBy}");
+    $nofollowSelect = db_column_exists('partner_sites', 'rel_nofollow') ? 'ps.rel_nofollow' : '0 AS rel_nofollow';
+    $stmt = db()->query("SELECT ps.id, ps.name, ps.url, COALESCE(ps.show_link, ps.is_enabled, 1) AS show_link, {$nofollowSelect} FROM partner_sites ps WHERE COALESCE(ps.show_link, ps.is_enabled, 1) = 1 ORDER BY {$orderBy}");
     $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     $seenPartnerUrls = [];
     foreach ($rows as $row) {
@@ -87,18 +89,18 @@ if ($fixedPages === []) {
         <?php else: ?>
             <ul class="sidebar-links sidebar-links--pages">
                 <?php if ($sitePostCount !== null): ?><li><a style="color:#000;">投稿数：<strong><?= e(number_format($sitePostCount)) ?></strong></a></li><?php endif; ?>
-                <?php foreach ($fixedPages as $page): ?>
-                    <?php $pageHref = trim((string)($page['href'] ?? '')); ?>
+                <?php foreach ($fixedPages as $fixedPage): ?>
+                    <?php $pageHref = trim((string)($fixedPage['href'] ?? '')); ?>
                     <?php
                     if ($pageHref === '') {
-                        $pageSlug = (string)$page['slug'];
+                        $pageSlug = (string)$fixedPage['slug'];
                         if ($pageSlug === CONTACT_PAGE_OLD_SLUG) {
                             $pageSlug = CONTACT_PAGE_SLUG;
                         }
                         $pageHref = public_url('page.php?slug=' . $pageSlug);
                     }
                     ?>
-                    <li><a href="<?= e($pageHref) ?>"><?= e((string)$page['title']) ?></a></li>
+                    <li><a href="<?= e($pageHref) ?>"><?= e((string)$fixedPage['title']) ?></a></li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
@@ -159,7 +161,8 @@ if ($fixedPages === []) {
         <?php else : ?>
             <ul class="sidebar-links sidebar-links--partners">
                 <?php foreach ($partnerLinks as $link) : ?>
-                    <li><a href="<?= e((string)$link['url']) ?>" target="_blank" rel="noopener noreferrer"><?= e((string)$link['name']) ?></a></li>
+                    <?php $partnerRel = ((int)($link['rel_nofollow'] ?? 0) === 1) ? 'noopener nofollow' : 'noopener'; ?>
+                    <li><a href="<?= e((string)$link['url']) ?>" target="_blank" rel="<?= e($partnerRel) ?>"><?= e((string)$link['name']) ?></a></li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>

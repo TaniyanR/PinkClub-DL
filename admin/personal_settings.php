@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail((string)post('_csrf', ''));
 
     $loginId = trim((string)post('login_id', ''));
-    $email = strtolower(trim((string)post('email', '')));
+    $email = trim((string)post('email', ''));
     $currentPassword = (string)post('current_password', '');
     $password = (string)post('password', '');
     $passwordConfirm = (string)post('password_confirm', '');
@@ -68,11 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateSql .= ' WHERE id=:id LIMIT 1';
                 $pdo->prepare($updateSql)->execute($updateParams);
 
+                // 旧版で初期 admin が重複して残った環境でも、個人設定完了後は再利用させない。
                 $pdo->prepare("DELETE FROM admins WHERE username = 'admin' AND id <> :id")
                     ->execute([':id' => $adminId]);
                 $pdo->commit();
                 $saved = true;
-            } catch (Throwable) {
+            } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }

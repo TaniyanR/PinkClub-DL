@@ -205,7 +205,7 @@ function index_table_exists(PDO $pdo, string $table): bool
 {
     static $cache = [];
 
-    if (!in_array($table, ['rss_items', 'rss_sources'], true)) {
+    if (!in_array($table, ['rss_items', 'rss_sources', 'item_tombstones'], true)) {
         return false;
     }
     if (array_key_exists($table, $cache)) {
@@ -248,7 +248,11 @@ function index_column_exists(PDO $pdo, string $table, string $column): bool
 
 function index_items_front_release_where(): string
 {
-    return '(items.release_date IS NULL OR items.release_date = "" OR items.release_date <= CURDATE())';
+    $where = '(items.release_date IS NULL OR items.release_date = "" OR items.release_date <= CURDATE())';
+    if (index_table_exists(db(), 'item_tombstones')) {
+        $where .= ' AND NOT EXISTS (SELECT 1 FROM item_tombstones gone WHERE gone.item_id = items.id)';
+    }
+    return $where;
 }
 
 function index_items_product_source_where(PDO $pdo): string
@@ -374,7 +378,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     ?>
     <article class="card rail-card rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async"<?= $imageFallbackAttr ?> style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>" width="<?= (int)$width ?>" height="<?= (int)$width ?>"<?= $lazyLoad ? ' loading="lazy"' : ' fetchpriority="high"' ?> decoding="async"<?= $imageFallbackAttr ?> style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
         <div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div>
       <?php endif; ?>
@@ -385,7 +389,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         <?php if ($sample['movie_url'] !== ''): ?>
           <button type="button" class="<?= e($movieClass) ?> sample-movie-trigger" data-movie-url="<?= e((string)$sample['movie_url']) ?>" data-movie-title="<?= e($title) ?>">サンプル動画</button>
         <?php elseif ($sampleFallbackUrl !== ''): ?>
-          <a class="<?= e($movieClass) ?>" href="<?= e($sampleFallbackUrl) ?>" target="_blank" rel="noopener noreferrer">サンプル動画</a>
+          <a class="<?= e($movieClass) ?>" href="<?= e($sampleFallbackUrl) ?>" target="_blank" rel="noopener sponsored nofollow">サンプル動画</a>
         <?php else: ?>
           <button type="button" class="<?= e($movieClass) ?>" disabled>サンプル動画</button>
         <?php endif; ?>
@@ -444,7 +448,7 @@ require __DIR__ . '/partials/header.php';
   <?php if ($fallbackItems !== []): ?>
     <section class="rail-section">
       <h2>取得できた作品</h2>
-      <div class="rail-row rail-row--180"><?php foreach ($fallbackItems as $index => $item) { render_item_card($item, 180, null, false, $index >= 6); } ?></div>
+      <div class="rail-row rail-row--180"><?php foreach ($fallbackItems as $index => $item) { render_item_card($item, 180, null, false, $index >= 1); } ?></div>
     </section>
   <?php endif; ?>
 <?php else: ?>

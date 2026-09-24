@@ -28,8 +28,7 @@ if (!rate_limit_allow('public_ranking_refresh', 8, 60)) {
 
 $type = trim((string)($_POST['type'] ?? ''));
 $period = trim((string)($_POST['period'] ?? ''));
-if (!in_array($type, ['items','actresses','genres','makers','labels','series'], true)
-    || !in_array($period, ['daily','weekly','monthly','yearly'], true)) {
+if ($type !== 'items' || !in_array($period, ['daily', 'weekly', 'monthly', 'yearly'], true)) {
     http_response_code(204);
     exit;
 }
@@ -45,13 +44,19 @@ $lockPath = $lockDirectory . '/ranking-refresh-' . $refreshKey . '.lock';
 $cooldownPath = $lockDirectory . '/ranking-refresh-' . $refreshKey . '.cooldown';
 $lockHandle = @fopen($lockPath, 'c');
 if (!is_resource($lockHandle) || !@flock($lockHandle, LOCK_EX | LOCK_NB)) {
-    if (is_resource($lockHandle)) fclose($lockHandle);
-    http_response_code(204); exit;
+    if (is_resource($lockHandle)) {
+        fclose($lockHandle);
+    }
+    http_response_code(204);
+    exit;
 }
 
 $lastRun = is_file($cooldownPath) ? (int)@filemtime($cooldownPath) : 0;
 if ($lastRun > time() - 60) {
-    @flock($lockHandle, LOCK_UN); fclose($lockHandle); http_response_code(204); exit;
+    @flock($lockHandle, LOCK_UN);
+    fclose($lockHandle);
+    http_response_code(204);
+    exit;
 }
 @touch($cooldownPath);
 
@@ -63,8 +68,8 @@ try {
             break;
         }
     }
-} catch (Throwable) {
-    error_log('ranking refresh failed');
+} catch (Throwable $e) {
+    error_log('ranking refresh failed: ' . $e->getMessage());
 }
 
 @flock($lockHandle, LOCK_UN);

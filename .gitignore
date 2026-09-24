@@ -1,27 +1,27 @@
 # Local config (secrets)
 /cache/
+/storage/
 /logs/
 /logs/*.log
 .DS_Store
 Thumbs.db
 vendor/
-node_modules/
-.env
-.env.*
-!.env.example
-*.bak
-*.old
-*.orig
-*.tmp
-*.log
-/.idea/
-/.vscode/
-/storage/cache/
 
 !public/assets/vendor/
 !public/assets/vendor/**
 
 config.local.php
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
+*.tmp
+*.bak
+*.old
+*.orig
+.idea/
+.vscode/
 
 !logs/.gitkeep
 !logs/

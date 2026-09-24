@@ -22,5 +22,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 csrf_validate_or_fail((string)post('_csrf', ''));
 
+require_once __DIR__ . '/../lib/indexnow.php';
+try {
+    $indexnowResult = pcf_indexnow_dispatch();
+} catch (Throwable $e) {
+    error_log('IndexNow timer failed: ' . $e->getMessage());
+}
 $now = date('Y-m-d H:i:s');
 timer_json(['ran' => false, 'saved_items' => 0, 'message' => '自動更新はcron専用です', 'at' => $now]);

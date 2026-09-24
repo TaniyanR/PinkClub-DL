@@ -1,5 +1,8 @@
 ErrorDocument 404 /404.php
+Options -Indexes
 RewriteEngine On
+RewriteRule (^|/)(?:\.git|\.env|\.svn)(?:[/.]|$) - [F,L,NC]
+RewriteRule ^(?:tests|scripts|docs)(?:/|$) - [F,L,NC]
 RewriteCond %{HTTP_HOST} ^www\.pinkclub-dl\.com$ [NC]
 RewriteRule ^ https://pinkclub-dl.com%{REQUEST_URI} [R=301,L,NE]
 RewriteCond %{HTTP_HOST} ^pinkclub-dl\.com$ [NC]
@@ -7,16 +10,15 @@ RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
 RewriteRule ^ https://pinkclub-dl.com%{REQUEST_URI} [R=301,L,NE]
 RewriteRule ^index\.(?:php|com)$ / [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+public/(item|items|search)\.php(?:[?\s]) [NC]
+RewriteRule ^public/(item|items|search)\.php$ /$1.php [R=301,L,NE]
 RewriteRule ^robots\.txt$ public/robots.php [L]
-RewriteCond %{THE_REQUEST} \s/+public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php(?:[?\s]) [NC]
-RewriteRule ^public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php$ /$1.php [R=301,L,NE]
-RewriteCond %{THE_REQUEST} \s/+(?:public/)?series_one\.php(?:[?\s]) [NC]
-RewriteRule ^(?:public/)?series_one\.php$ /series_detail.php [R=301,L,NE]
-RewriteRule ^(config(?:\.local)?\.php|cache|logs|storage|config|lib|sql)(/|$) - [F,L]
+RewriteRule ^(config(?:\.local)?\.php|cache|storage|logs|config|lib|sql)(/|$) - [F,L]
 RewriteRule ^public/ - [L]
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
+RewriteCond %{REQUEST_URI} !^/indexnow-key\.php$
 RewriteRule ^(.*)$ public/$1 [L]
 
 <IfModule mod_expires.c>
@@ -32,10 +34,13 @@ ExpiresByType image/x-icon "access plus 1 year"
 ExpiresByType font/woff2 "access plus 1 year"
 </IfModule>
 <IfModule mod_headers.c>
-Header always unset X-Powered-By
-Header always set X-Content-Type-Options "nosniff"
+SetEnvIf Request_URI "^/(?:public/)?search\.php(?:[/?]|$)" pcf_search_noindex=1
+SetEnvIf Request_URI "^/(?:public/)?out\.php(?:[/?]|$)" pcf_out_referrer=1
+Header set X-Robots-Tag "noindex, follow" env=pcf_search_noindex
 Header always set X-Frame-Options "SAMEORIGIN"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin" env=!pcf_out_referrer
+Header always set Referrer-Policy "unsafe-url" env=pcf_out_referrer
 Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 <FilesMatch "\.(?:css|js|jpe?g|png|gif|webp|svg|ico|woff2)$">
 Header set Cache-Control "public, max-age=31536000, immutable"
