@@ -33,7 +33,7 @@ require __DIR__ . '/partials/header.php';
     <a class="pcf-button" href="<?= e(public_url('index.php')) ?>">トップページへ戻る</a>
     <a class="pcf-button pcf-button--secondary" href="<?= e(public_url('items.php')) ?>">商品一覧へ移動</a>
     <a class="pcf-button pcf-button--secondary" href="<?= e(public_url('search.php')) ?>">検索ページへ移動</a>
-    <a class="pcf-button pcf-button--secondary" href="javascript:history.back()">前のページへ戻る</a>
+    <button class="pcf-button pcf-button--secondary" type="button" onclick="history.back()">前のページへ戻る</button>
   </div>
   <form class="pcf-search-form" action="<?= e(public_url('search.php')) ?>" method="get" role="search">
     <label for="not-found-search">キーワード検索</label>

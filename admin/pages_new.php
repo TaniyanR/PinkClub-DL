@@ -69,6 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':seo_description' => $values['seo_description'],
                     ':is_published' => $values['is_published'] === '1' ? 1 : 0,
                 ]);
+                if ($values['is_published'] === '1') {
+                    require_once __DIR__ . '/../lib/indexnow.php';
+                    pcf_indexnow_enqueue(public_url('page.php') . '?slug=' . rawurlencode($values['slug']));
+                }
                 flash_set('success', '固定ページを作成しました。');
                 app_redirect(admin_url('pages.php?edit=' . (string)db()->lastInsertId()));
             }

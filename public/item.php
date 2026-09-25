@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../lib/repository.php';
 require_once __DIR__ . '/../lib/public_rankings.php';
+require_once __DIR__ . '/../lib/search_lifecycle.php';
 require_once __DIR__ . '/partials/public_ui.php';
 
 function item_normalize_movie_url(string $url): string
@@ -257,6 +258,9 @@ if ($contentId === '' && $cid !== '') {
 
 $item = false;
 try {
+    if (($id > 0 || $contentId !== '') && pcf_item_is_gone($id, $contentId)) {
+        pcf_search_error(410);
+    }
     if ($id > 0) {
         $stmt = db()->prepare('SELECT * FROM items WHERE id = ? AND ' . items_front_release_where());
         $stmt->execute([$id]);
@@ -273,8 +277,9 @@ try {
     } elseif ($contentId !== '') {
         $item = fetch_item_by_content_id($contentId);
     }
-} catch (Throwable) {
-    $item = false;
+} catch (Throwable $e) {
+    error_log('Item lookup failed: ' . $e->getMessage());
+    pcf_search_error(503);
 }
 
 if (!$item) {
@@ -699,7 +704,7 @@ require __DIR__ . '/partials/header.php';
   <?php endif; ?>
 
   <?php if ($affiliateUrl !== ''): ?>
-    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer">購入ボタン</a></p>
+    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener sponsored nofollow">購入ボタン</a></p>
   <?php endif; ?>
 
   <section class="pcf-detail pcf-item-main">
@@ -733,7 +738,7 @@ require __DIR__ . '/partials/header.php';
   </section>
 
   <?php if ($affiliateUrl !== ''): ?>
-    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer">購入ボタン</a></p>
+    <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener sponsored nofollow">購入ボタン</a></p>
   <?php endif; ?>
 
   <h2 class="pcf-section-title">関連作品</h2>

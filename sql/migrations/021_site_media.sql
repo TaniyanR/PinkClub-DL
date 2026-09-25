@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS site_media (
+    media_key VARCHAR(32) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(64) NOT NULL,
+    width INT UNSIGNED NOT NULL DEFAULT 0,
+    height INT UNSIGNED NOT NULL DEFAULT 0,
+    byte_size INT UNSIGNED NOT NULL DEFAULT 0,
+    sha256 CHAR(64) NOT NULL,
+    media_data LONGBLOB NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (media_key),
+    KEY idx_site_media_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

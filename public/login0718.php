@@ -13,11 +13,6 @@ $autoSetup = installer_auto_run_if_needed();
 if (($autoSetup['success'] ?? false) !== true) {
     app_redirect('/public/setup_check.php');
 }
-$autoSetupPassword = $autoSetup['result']['initial_password'] ?? null;
-if (is_string($autoSetupPassword) && $autoSetupPassword !== '') {
-    $_SESSION['setup_initial_password_once'] = $autoSetupPassword;
-    app_redirect('/public/setup_check.php');
-}
 
 if (auth_user()) {
     app_redirect(ADMIN_HOME_PATH);
@@ -30,6 +25,18 @@ $resetSuccess = isset($_SESSION['forgot_password_success']) && is_string($_SESSI
     : null;
 unset($_SESSION['forgot_password_success']);
 
+$initialCredentials = isset($_SESSION['installer_initial_credentials']) && is_array($_SESSION['installer_initial_credentials'])
+    ? $_SESSION['installer_initial_credentials']
+    : null;
+unset($_SESSION['installer_initial_credentials']);
+if (is_array($initialCredentials)) {
+    $initialUsername = trim((string)($initialCredentials['username'] ?? ''));
+    $initialPassword = (string)($initialCredentials['password'] ?? '');
+    if ($initialUsername === '' || $initialPassword === '') {
+        $initialCredentials = null;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify(post('_csrf'))) {
         unset($_SESSION['_csrf']);
@@ -41,10 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = (string) post('password', '');
 
         if (auth_attempt($username, $password)) {
-            if (!auth_credentials_are_personalized()) {
-                flash_set('success', '初回ログインです。ログインID・再設定用メールアドレス・新しいパスワードを設定してください。');
-                app_redirect('/admin/personal_settings.php');
-            }
             flash_set('success', 'ログインしました。');
             app_redirect(ADMIN_HOME_PATH);
         }
@@ -58,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 csrf_token();
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = $faviconPath !== '' ? public_url($faviconPath) : '';
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
 $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
 ?>
 <!doctype html>
@@ -80,6 +83,15 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
     <section class="login-card">
       <h1 class="login-title"><?= e(APP_NAME) ?></h1>
       <p class="login-subtitle">管理画面ログイン</p>
+
+      <?php if (is_array($initialCredentials)): ?>
+        <div class="alert alert-warning" role="status">
+          <strong>初回ログイン情報</strong><br>
+          ログインID: <code><?= e($initialUsername) ?></code><br>
+          パスワード: <code><?= e($initialPassword) ?></code><br>
+          <small>この表示は一度だけです。ログイン後、個人設定でログインIDとパスワードを変更してください。</small>
+        </div>
+      <?php endif; ?>
 
       <?php if ($setupMessage !== null): ?>
         <div class="alert alert-warning" role="alert">

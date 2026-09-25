@@ -14,7 +14,6 @@ function app_config(): array
 
     return $GLOBALS['app_config'];
 }
-
 function url_path(string $path): string
 {
     return rtrim(BASE_URL, '/') . $path;
@@ -75,6 +74,29 @@ function public_url(string $path = ''): string
     }
 
     return url_path('/' . $normalized);
+}
+
+/**
+ * Builds a public file URL with a version derived from its modification time.
+ * This prevents browsers from keeping an outdated favicon after replacement.
+ */
+function public_versioned_url(string $path): string
+{
+    $normalized = ltrim(trim($path), '/');
+    if ($normalized === '') {
+        return '';
+    }
+
+    $url = public_url($normalized);
+    $filePath = __DIR__ . '/../public/' . $normalized;
+    if (is_file($filePath)) {
+        $modifiedAt = filemtime($filePath);
+        if ($modifiedAt !== false) {
+            $url .= (str_contains($url, '?') ? '&' : '?') . 'v=' . rawurlencode((string)$modifiedAt);
+        }
+    }
+
+    return $url;
 }
 
 function app_redirect(string $path): never

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/duga_api_client.php';
 require_once __DIR__ . '/duga_sync_service.php';
+require_once __DIR__ . '/site_media.php';
 require_once __DIR__ . '/site_settings.php';
 require_once __DIR__ . '/api_credentials.php';
 require_once __DIR__ . '/config.php';
@@ -119,4 +120,3 @@ function duga_sync_service(?string $apiType = null): DugaSyncService
 {
     return new DugaSyncService($apiType === null ? duga_client_from_settings() : duga_client_for_type($apiType), db());
 }
-

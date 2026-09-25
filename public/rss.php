@@ -58,7 +58,7 @@ include __DIR__ . '/partials/header.php';
             <h1 class="section-title">RSS一覧</h1>
             <?php foreach ($rows as $row) : ?>
                 <article class="rss-list__item">
-                    <h3><a href="<?php echo e((string)($row['link'] ?? '')); ?>" target="_blank" rel="noopener noreferrer"><?php echo e((string)($row['title'] ?? '')); ?></a></h3>
+                    <h3><a href="<?php echo e((string)($row['link'] ?? '')); ?>" target="_blank" rel="noopener"><?php echo e((string)($row['title'] ?? '')); ?></a></h3>
                     <p><?php echo e((string)($row['published_at'] ?? '')); ?> / <?php echo e((string)($row['source_name'] ?? '')); ?></p>
                 </article>
             <?php endforeach; ?>

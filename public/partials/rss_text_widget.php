@@ -19,8 +19,8 @@ try {
         $maxItems = min(40, max(0, (int)$GLOBALS['pcf_rss_widget_max_items']));
     }
     $items = rss_trade_select_host_aware($candidates, $maxItems, max(1, $maxItems), 30);
-} catch (Throwable) {
-    error_log('[rss] text access-trade selection skipped');
+} catch (Throwable $e) {
+    error_log('[rss] text access-trade selection skipped: ' . $e->getMessage());
     $items = [];
 }
 ?>
@@ -30,7 +30,7 @@ try {
             <ul class="rss-list">
                 <?php foreach ($items as $item) : ?>
                     <li class="rss-list__item">
-                        <a href="<?php echo e(rss_trade_out_url($item)); ?>" target="_blank" rel="noopener noreferrer"><?php echo e((string)($item['title'] ?? '')); ?></a>
+                        <a href="<?php echo e(rss_trade_out_url($item)); ?>" target="_blank" rel="noopener"><?php echo e((string)($item['title'] ?? '')); ?></a>
                     </li>
                 <?php endforeach; ?>
             </ul>

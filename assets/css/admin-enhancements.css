@@ -1,0 +1,194 @@
+/* Admin content-area readability enhancements. Sidebar intentionally unchanged. */
+body.admin-page .admin-main{
+  --admin-accent-pink:#d63384;
+  --admin-accent-blue:#2271b1;
+  --admin-accent-green:#2e8540;
+  --admin-accent-amber:#b86b00;
+  --admin-card-bg:#fff;
+}
+
+body.admin-page .admin-main > .admin-card,
+body.admin-page .admin-main > form.admin-card{
+  background:var(--admin-card-bg);
+  border:1px solid #d7dce1;
+  border-radius:10px;
+  padding:20px 22px;
+  box-shadow:0 4px 14px rgba(29,35,39,.06);
+}
+
+/* Keep form cards and their row backgrounds visually consistent across pages. */
+body.admin-page .admin-main > .admin-card--form{
+  width:100%;
+  max-width:none;
+  box-sizing:border-box;
+}
+body.admin-page .admin-main .admin-card--form > form{
+  width:100%;
+  max-width:none !important;
+  box-sizing:border-box;
+}
+body.admin-page .admin-main .admin-card--form form > label{
+  width:100%;
+  box-sizing:border-box;
+}
+
+body.admin-page .admin-main > .admin-card > h1:first-child,
+body.admin-page .admin-main > .admin-card > h2:first-child{
+  padding-left:11px;
+  border-left:4px solid var(--admin-accent-blue);
+  line-height:1.3;
+}
+
+body.admin-page .admin-main > .admin-card--accent-pink > h1:first-child,
+body.admin-page .admin-main > .admin-card--accent-pink > h2:first-child{
+  border-left-color:var(--admin-accent-pink);
+}
+
+body.admin-page .admin-main .admin-card--form form > label{
+  padding:9px 10px;
+  margin-bottom:6px;
+  border-radius:7px;
+}
+body.admin-page .admin-main .admin-card--form form > label:nth-of-type(odd){
+  background:#f8fafc;
+}
+body.admin-page .admin-main .admin-card--form form > label:focus-within{
+  background:#fff6fb;
+  box-shadow:inset 3px 0 0 var(--admin-accent-pink);
+}
+
+body.admin-page .admin-main input:focus,
+body.admin-page .admin-main select:focus,
+body.admin-page .admin-main textarea:focus{
+  outline:2px solid rgba(34,113,177,.22);
+  outline-offset:1px;
+  border-color:var(--admin-accent-blue);
+}
+
+body.admin-page .admin-main input[readonly],
+body.admin-page .admin-main textarea[readonly]{
+  background:#f1f4f7;
+  color:#50575e;
+}
+
+body.admin-page .admin-main .admin-table th{
+  background:#eef5fb;
+  color:#1d3f5f;
+  font-weight:700;
+}
+body.admin-page .admin-main .admin-table tr:nth-child(even) td{
+  background:#fbfcfd;
+}
+body.admin-page .admin-main .admin-table tr:hover td{
+  background:#fff7fb;
+}
+
+body.admin-page .admin-main .admin-status-grid .admin-status-card{
+  background:#fff;
+  border:1px solid #dfe4e8;
+  border-radius:9px;
+  padding:14px;
+  box-shadow:0 2px 8px rgba(29,35,39,.045);
+}
+body.admin-page .admin-main .admin-status-grid .admin-status-card:nth-child(4n+1){border-top:3px solid var(--admin-accent-blue)}
+body.admin-page .admin-main .admin-status-grid .admin-status-card:nth-child(4n+2){border-top:3px solid var(--admin-accent-pink)}
+body.admin-page .admin-main .admin-status-grid .admin-status-card:nth-child(4n+3){border-top:3px solid var(--admin-accent-green)}
+body.admin-page .admin-main .admin-status-grid .admin-status-card:nth-child(4n+4){border-top:3px solid #7c5cc4}
+
+body.admin-page .admin-main .flash.success,
+body.admin-page .admin-main .admin-notice--success{
+  border-left:4px solid var(--admin-accent-green);
+}
+body.admin-page .admin-main .flash.error,
+body.admin-page .admin-main .admin-notice--error{
+  border-left:4px solid #d63638;
+}
+body.admin-page .admin-main .alert-warning{
+  border-left:4px solid var(--admin-accent-amber);
+}
+
+body.admin-page .admin-main button:not(.button-secondary){
+  box-shadow:0 2px 5px rgba(34,113,177,.18);
+}
+body.admin-page .admin-main button:not(.button-secondary):hover{
+  filter:brightness(.96);
+}
+body.admin-page .admin-main button:focus-visible,
+body.admin-page .admin-main a.button-secondary:focus-visible{
+  outline:3px solid rgba(34,113,177,.28);
+  outline-offset:2px;
+}
+
+body.admin-page .admin-main .admin-media-current{
+  display:block;
+  margin:6px 0 5px;
+  color:#50575e;
+  font-weight:600;
+}
+body.admin-page .admin-main .admin-media-preview{
+  display:block;
+  max-width:100%;
+  height:auto;
+  border:1px solid #d7dce1;
+  border-radius:7px;
+  background:#fff;
+  object-fit:contain;
+  box-shadow:0 2px 8px rgba(29,35,39,.05);
+}
+body.admin-page .admin-main .admin-media-preview--logo{max-width:400px;max-height:100px}
+body.admin-page .admin-main .admin-media-preview--favicon{width:64px;height:64px}
+body.admin-page .admin-main .admin-media-preview--ogp{max-width:480px;max-height:252px}
+
+/* All top-level admin content cards use the same available width. */
+body.admin-page .admin-main > .admin-card,
+body.admin-page .admin-main > form.admin-card{
+  width:100%;
+  max-width:none;
+  margin-left:0;
+  margin-right:0;
+  box-sizing:border-box;
+}
+
+@media (max-width:768px){
+  body.admin-page .admin-main > .admin-card,
+  body.admin-page .admin-main > form.admin-card{
+    padding:16px 14px;
+    border-radius:8px;
+  }
+  body.admin-page .admin-main .admin-card--form form > label{
+    padding:8px;
+  }
+}
+
+/* SEO settings reuse the shared admin cards, with local checkbox/table layout. */
+body.admin-page .admin-search-settings{overflow-wrap:anywhere}
+body.admin-page .admin-search-settings .admin-status-grid{margin:16px 0;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+body.admin-page .admin-search-settings .admin-status-card{min-width:0}
+body.admin-page .admin-search-settings .admin-status-card .admin-search-origin{font-size:14px;line-height:1.6}
+body.admin-page .admin-search-settings .admin-form-note{line-height:1.8}
+body.admin-page .admin-search-settings form > label.admin-search-confirm{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+body.admin-page .admin-search-settings form > label.admin-search-confirm > input{
+  width:18px;
+  height:18px;
+  max-width:none;
+  flex:0 0 18px;
+  margin:2px 0 0;
+  padding:0;
+}
+body.admin-page .admin-search-settings input{box-sizing:border-box;min-width:0}
+body.admin-page .admin-search-settings .admin-actions{gap:10px;margin-top:12px}
+body.admin-page .admin-search-settings button{max-width:100%;white-space:normal;line-height:1.5}
+body.admin-page .admin-search-settings .admin-search-section{margin-top:24px;padding-top:20px;border-top:1px solid var(--admin-border)}
+body.admin-page .admin-search-settings .admin-search-section h3{margin:0 0 14px;font-size:16px}
+body.admin-page .admin-search-settings .admin-search-table-wrap{overflow-x:auto}
+body.admin-page .admin-search-settings .admin-table{display:table;min-width:560px;table-layout:fixed}
+body.admin-page .admin-search-settings .admin-table th:first-child{width:70px}
+body.admin-page .admin-search-settings .admin-table th:last-child{width:150px}
+@media (max-width:768px){
+  body.admin-page .admin-search-settings .admin-actions > button{width:100%}
+}
+

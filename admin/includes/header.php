@@ -14,6 +14,7 @@ $menuGroups = [
         ['label' => '広告コード', 'file' => 'ads_code.php'],
         ['label' => 'コード設定', 'file' => 'code_settings.php'],
         ['label' => 'cron設定', 'file' => 'cron_settings.php'],
+        ['label' => 'SEO・IndexNow', 'file' => 'search_settings.php'],
     ]],
     ['label' => 'リンク設定', 'children' => [
         ['label' => '相互リンク管理', 'file' => 'links.php'],
@@ -37,22 +38,51 @@ $menuGroups = [
     ]],
 ];
 
+$menuGroups = array_values(array_filter(
+    $menuGroups,
+    static fn(array $group): bool => (string)($group['label'] ?? '') !== '削除依頼'
+        && basename((string)($group['file'] ?? '')) !== 'deletion_requests.php'
+));
+
+$adminMenuItemIsActive = static function (string $target) use ($currentScript): bool {
+    $path = (string)(parse_url($target, PHP_URL_PATH) ?: $target);
+    if ($currentScript !== basename($path)) {
+        return false;
+    }
+
+    $query = (string)(parse_url($target, PHP_URL_QUERY) ?: '');
+    if ($query === '') {
+        return true;
+    }
+
+    $expected = [];
+    parse_str($query, $expected);
+    foreach ($expected as $key => $value) {
+        $actual = $_GET[$key] ?? null;
+        if (is_array($value) || is_array($actual) || (string)$actual !== (string)$value) {
+            return false;
+        }
+    }
+    return true;
+};
+
 $flash = function_exists('flash_get') ? flash_get() : null;
 $titleText = (string)($title ?? APP_NAME);
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = '';
-if ($faviconPath !== '') {
-    $faviconRelativePath = ltrim($faviconPath, '/');
-    if (str_starts_with($faviconRelativePath, 'uploads/site_settings/')) {
-        $faviconRelativePath = 'public/' . $faviconRelativePath;
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
+$faviconType = 'image/x-icon';
+if (function_exists('site_media_meta_get')) {
+    $faviconMedia = site_media_meta_get('favicon');
+    if (is_array($faviconMedia) && trim((string)($faviconMedia['mime_type'] ?? '')) !== '') {
+        $faviconType = trim((string)$faviconMedia['mime_type']);
+    } else {
+        $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
+        $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
     }
-    $faviconUrl = public_url($faviconRelativePath);
-    $faviconFile = __DIR__ . '/../../public/' . ltrim($faviconPath, '/');
-    if (is_file($faviconFile)) {
-        $faviconUrl .= (str_contains($faviconUrl, '?') ? '&' : '?') . 'v=' . rawurlencode((string)filemtime($faviconFile));
-    }
+} else {
+    $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
+    $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
 }
-$faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
 ?>
 <!doctype html>
 <html lang="ja">
@@ -66,6 +96,9 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
     <link rel="apple-touch-icon" href="<?= e($faviconUrl) ?>">
   <?php endif; ?>
   <link rel="stylesheet" href="<?= e(asset_url('css/style.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset_url('css/admin-enhancements.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset_url('css/admin-auto-mobile.css')) ?>">
+  <?php if ($currentScript === 'analytics.php'): ?><script src="<?= e(asset_url('js/admin-analytics.js')) ?>" defer></script><?php endif; ?>
 </head>
 <body class="admin-page">
 <input class="admin-menu-toggle" type="checkbox" id="admin-menu-toggle" hidden>
@@ -73,7 +106,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
   <label class="admin-menu-toggle__button" for="admin-menu-toggle" aria-label="管理メニューを開閉">☰</label>
   <div class="admin-topbar__brand"><a href="<?= e(admin_url('index.php')) ?>">PinkClub-DL 管理</a></div>
   <div class="admin-topbar__right">
-    <a href="<?= e(public_url('')) ?>" target="_blank" rel="noopener noreferrer">フロント表示</a>
+    <a href="<?= e(public_url('')) ?>" target="_blank" rel="noopener">フロント表示</a>
     <span class="admin-topbar__separator" aria-hidden="true"> | </span>
     <form method="post" action="<?= e(admin_url('logout.php')) ?>" style="display:inline;margin:0;">
       <?= csrf_input() ?>
@@ -90,7 +123,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
             <?php
             $isGroupActive = false;
             foreach ($group['children'] as $item) {
-                if ($currentScript === basename((string)$item['file'])) {
+                if ($adminMenuItemIsActive((string)$item['file'])) {
                     $isGroupActive = true;
                     break;
                 }
@@ -100,13 +133,13 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
               <details <?= $isGroupActive ? 'open' : '' ?>>
                 <summary class="admin-menu__link"><?= e((string)$group['label']) ?></summary>
                 <ul class="admin-sidebar__list admin-menu__child">
-                  <?php foreach ($group['children'] as $item): $isActive = ($currentScript === basename((string)$item['file'])); ?>
+                  <?php foreach ($group['children'] as $item): $isActive = $adminMenuItemIsActive((string)$item['file']); ?>
                     <li><a class="admin-menu__link <?= $isActive ? 'is-active' : '' ?>" href="<?= e(admin_url((string)$item['file'])) ?>"><?= e((string)$item['label']) ?></a></li>
                   <?php endforeach; ?>
                 </ul>
               </details>
             </li>
-          <?php else: $isActive = ($currentScript === basename((string)$group['file'])); ?>
+          <?php else: $isActive = $adminMenuItemIsActive((string)$group['file']); ?>
             <li><a class="admin-menu__link <?= $isActive ? 'is-active' : '' ?>" href="<?= e(admin_url((string)$group['file'])) ?>"><?= e((string)$group['label']) ?></a></li>
           <?php endif; ?>
         <?php endforeach; ?>

@@ -141,8 +141,8 @@ if (!function_exists('render_shared_content_ad_row')) {
             rss_widget_bootstrap(false);
             $candidates = rss_trade_candidate_pool(60, false, 14);
             $items = rss_trade_select_host_aware($candidates, 40, 40, 30);
-        } catch (Throwable) {
-            error_log('[rss] bottom access-trade widget skipped');
+        } catch (Throwable $e) {
+            error_log('[rss] bottom access-trade widget skipped: ' . $e->getMessage());
             $items = [];
         }
 
@@ -157,7 +157,7 @@ if (!function_exists('render_shared_content_ad_row')) {
                 echo '<ul class="rss-list">';
                 foreach ($columnItems as $item) {
                     $href = rss_trade_out_url($item);
-                    echo '<li class="rss-list__item"><a href="' . e($href) . '" target="_blank" rel="noopener noreferrer">' . e((string)($item['title'] ?? '')) . '</a></li>';
+                    echo '<li class="rss-list__item"><a href="' . e($href) . '" target="_blank" rel="noopener">' . e((string)($item['title'] ?? '')) . '</a></li>';
                 }
                 echo '</ul>';
             }

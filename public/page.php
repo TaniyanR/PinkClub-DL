@@ -121,24 +121,28 @@ function contact_duplicate_cleanup(): void
         return;
     }
 
-    $files = glob(rate_limit_dir() . DIRECTORY_SEPARATOR . 'contact_duplicate_*.json');
-    if (!is_array($files)) {
-        return;
-    }
-
     $expiresBefore = time() - 3600;
-    foreach ($files as $file) {
-        if (!is_string($file) || is_link($file) || !is_file($file)) {
-            continue;
+    $scanned = 0;
+    $deleted = 0;
+    try {
+        $iterator = new FilesystemIterator(rate_limit_dir(), FilesystemIterator::SKIP_DOTS);
+        foreach ($iterator as $fileInfo) {
+            if (++$scanned > 500 || $deleted >= 25) {
+                break;
+            }
+            if (!$fileInfo->isFile() || $fileInfo->isLink()) {
+                continue;
+            }
+            $base = $fileInfo->getFilename();
+            if (!preg_match('/\Acontact_duplicate_[a-f0-9]{64}\.json\z/', $base)) {
+                continue;
+            }
+            $mtime = $fileInfo->getMTime();
+            if ($mtime < $expiresBefore && @unlink($fileInfo->getPathname())) {
+                $deleted++;
+            }
         }
-        $base = basename($file);
-        if (!preg_match('/\Acontact_duplicate_[a-f0-9]{64}\.json\z/', $base)) {
-            continue;
-        }
-        $mtime = @filemtime($file);
-        if (is_int($mtime) && $mtime < $expiresBefore) {
-            @unlink($file);
-        }
+    } catch (Throwable) {
     }
 }
 
@@ -196,7 +200,9 @@ function about_access_ranking_html(): string
             return '<p class="pcf-reverse-ranking__empty">アクセスランキングのデータがありません。</p>';
         }
 
-        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, MAX(NULLIF(ps.url, "")) AS site_url, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
+        $nofollowSelect = db_column_exists('partner_sites', 'rel_nofollow')
+            ? 'MAX(COALESCE(ps.rel_nofollow, 0))' : '0';
+        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, MAX(NULLIF(ps.url, "")) AS site_url, ' . $nofollowSelect . ' AS rel_nofollow, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
         $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (Throwable) {
         $rows = [];
@@ -217,7 +223,8 @@ function about_access_ranking_html(): string
         if (filter_var($siteUrl, FILTER_VALIDATE_URL) !== false
             && in_array(strtolower((string)parse_url($siteUrl, PHP_URL_SCHEME)), ['http', 'https'], true)
         ) {
-            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="noopener noreferrer nofollow">' . e($siteName) . '</a>';
+            $partnerRel = ((int)($row['rel_nofollow'] ?? 0) === 1) ? 'noopener nofollow' : 'noopener';
+            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="' . e($partnerRel) . '">' . e($siteName) . '</a>';
         }
         $html .= '<li class="pcf-reverse-ranking__row">'
             . '<span class="pcf-reverse-ranking__position">' . e((string)($index + 1)) . '</span>'
@@ -238,7 +245,8 @@ if ($slug === '' || $slug === CONTACT_PAGE_OLD_SLUG) {
 $oldAboutBody = "このサイトについての説明ページです。\n内容は管理画面から編集できます。";
 $oldPrivacyPolicyBody = "プライバシーポリシーの初期ページです。\n内容は管理画面から編集できます。";
 $privacyPolicyBody = "【 [サイト名]について 】\n「[サイト名]」(以下当サイト)にお越しくださってありがとうございます。\n※当サイトはアフィリエイトを使用しております。\n\n【 リンクについて 】\n当サイトはリンクフリーです。\nどのページのどの記事にリンクを貼って頂いてもかまいません。\nただし画像は元サイト様のものでお借りしているだけなので二次使用やダウンロードはご遠慮ください。\n\n【 当サイト情報 】\nサイト名：[サイト名]\nURL：[サイトURL] \nRSS：[サイトRSS] \n\n【 お問い合わせ 】\n何か問題等があればこちら「お問い合わせ」よりご連絡ください。\n※ただし、広告は募集しておりません。\n\n【 個人情報の利用目的 】\n当サイトでは、メールでの【お問い合わせ】にて「名前（ハンドルネーム）」「メールアドレス」等の個人情報をご登録いただく場合がございます。\nこれらの個人情報は必要な情報を電子メールなどをでご連絡する場合に利用させていただくものであり、個人情報をご提供いただく際の目的以外では利用いたしません。\n尚、動画などを購入して頂いた場合は、購入していただいたサイトに個人情報を登録して頂きますが、その場合は登録したサイトの「個人情報保護方針」の順じます。\n\n【 個人情報の第三者への開示 】\n当サイトでは、個人情報は適切に管理し、以下に該当する場合を除いて第三者に開示することはありません。\n※ただし「本人の承諾があった場合」「法令に基づく場合」「人の生命」「身体又は財産の保護」「公衆衛生・児童の健全育成上特に必要」な場合は除きます。\n\n【 個人情報の開示、訂正、追加、削除、利用停止 】\nご本人様からの個人データの開示、訂正、追加、削除、利用停止のご希望の場合には、ご本人様であることを確認させていただいた上、速やかに対応させていただきます。\n\n【 Googleアナリティクスについて 】\n当サイトでは、サイトの利用動向を分析する目的で「Googleアナリティクス」を使用しています。\nGoogleアナリティクスはトラフィックデータの収集のためにCookieを使用しています。\nこのトラフィックデータは匿名で収集されており、個人を特定するものではありません。\nまた、当サイトを経由してGoogle Analyticsにより収集されたデータはGoogle社のプライバシーポリシーに基づいて管理されており、当サイトはGoogle Analyticsのサービス利用による一切の損害について責任を負わないものとします。\nGoogleアナリティクスのプライバシーポリシーはこちらのページでご確認いただけます。\nこの機能はCookieを無効にすることで収集を拒否することが出来ますので、お使いのブラウザの設定をご確認ください。\n\n【 広告配信に関して 】\n当サイトが掲載している広告は電気通信事業者等の広告主と直接契約を結んで実施しているものと、広告代理店アフィリエイトサービスプロバイダーを通じて実施しているものがあります。\n当サイトでは成果報酬型広告の効果測定のため、利⽤者の⽅のアクセス情報を外部事業者に送信しております。\n個⼈を特定する情報ではございません。　また当該の情報が⽬的外利⽤される事は⼀切ございません。\n当サイトの広告は閲覧者の閲覧履歴、個⼈データ等を取得し、追跡などをするものではありません。\n\n■ 送信される情報の内容\n・ 閲覧したサイトのURL\n・ 成果報酬型広告の表⽰⽇時\n・ 成果報酬型広告のクリック⽇時\n・ 成果報酬型広告の計測に必要なクッキー情報\n・ 成果報酬型広告表⽰時及び広告クリック時のIPア ドレス\n・ 成果報酬型広告表⽰時及び広告クリック時に使⽤されたインターネット端末およびインターネットブラウザ−の種類\n\n■ 利⽤⽬的\n・ 成果報酬型広告の効果測定および不正防⽌のため\nまた、第三者配信事業者は、ユーザーの興味に応じた広告を表示するためにCookie（クッキー）を使用することがあります。\n「https://optout.aboutads.info/」にアクセスすることで Cookie を無効にできます。\n\n【 免責事項 】\n当サイトからリンクやバナーなどによって他のサイトに移動された場合、移動先サイトで提供される情報、サービス等について一切の責任を負いません。\n当サイトのコンテンツ・情報につきまして、可能な限り正確な情報を掲載するよう努めておりますが、誤情報が入り込んだり、情報が古くなっていることもございます。\n当サイトに掲載された内容によって生じた損害等の一切の責任を負いかねますのでご了承ください。\n\n【 プライバシーポリシーの変更について 】\n当サイトは、個人情報に関して適用される日本の法令を遵守するとともに、本ポリシーの内容を適宜見直しその改善に努めます。\n修正された最新のプライバシーポリシーは常に本ページにて開示されます。";
-$aboutBody = "【 [サイト名]紹介 】\n[サイト名]([サイトURL])は、ASP「アプリケーションサービスプロバイダ（Application Service Provider）」というアフィリエイトの会社の広告を配信して運営しているウェブサイトです。 \n完全なるアダルトサイトで、18歳未満には提供できません。\n\n【 当サイト情報 】\nサイト名：[サイト名]\nURL：[サイトURL] \nRSS：[サイトRSS] \n\n【 リンクについて 】\n当サイトはリンクフリーです。\nどのページのどの記事にリンクを貼って頂いてもかまいません。\nただし画像は元サイト様のもので、お借りしているだけなので二次使用やダウンロードはご遠慮ください。\n\n【 相互リンクについて 】\n当サイトは相互リンクを募集していません。 \n申し訳ございません\n\n【 逆アクセスランキング 】 \n[アクセスランキング]\n\n【 お問い合わせ 】\n商品購入などについて購入したサイト様にご確認ください。\nもし当サイトについて何かあれば下記の「お問い合わせ」よりご連絡下さい。\n※ただし、広告は募集しておりません。\n\n<h3>個人情報保護方針</h3>\n個人情報保護方針(プライバシーポリシー)については下記をご覧下さい。\n・ [Privacy Policy(URL付き)]\n\n【 「検索」について 】\nあなたの好きなジャンルを探す為にあるこの「検索」をぜひご活用ください。 ";
+$aboutBody = "【 [サイト名]紹介 】\n[サイト名]([サイトURL])は、ASP「アプリケーションサービスプロバイダ（Application Service Provider）」というアフィリエイトの会社の広告を配信して運営しているウェブサイトです。 \n完全なるアダルトサイトで、18歳未満には提供できません。\n\n【 当サイト情報 】\nサイト名：[サイト名]\nURL：[サイトURL] \nRSS：[サイトRSS] \n\n【 リンクについて 】\n当サイトはリンクフリーです。\nどのページのどの記事にリンクを貼って頂いてもかまいません。\nただし画像は元サイト様のもので、お借りしているだけなので二次使用やダウンロードはご遠慮ください。\n\n【 相互リンクについて 】\n当サイトは相互リンクを募集していません。 \n申し訳ございません\n\n【 逆アクセスランキング 】 \n[アクセスランキング]\n\n【 お問い合わせ 】\n商品購入などについて購入したサイト様にご確認ください。\nもし当サイトについて何かあれば下記の「お問い合わせ」よりご連絡下さい。\n※ただし、広告は募集しておりません。\n\n<h3>個人情報保護方針</h3>\n個人情報保護方針(プライバシーポリシー)については下記のページをご覧下さい。\n・ [Privacy Policy(URL付き)]ページ\n\n【 「検索」について 】\nあなたの好きなジャンルを探す為にあるこの「検索」をぜひご活用ください。 ";
+$aboutBody = str_replace('[Privacy Policy(URL付き)]ページ', '[Privacy Policy(URL付き)]', $aboutBody);
 $p = null;
 if (db_table_exists('fixed_pages')) {
     migrate_contact_page_slug();
@@ -286,12 +294,6 @@ $contactForm = [
 ];
 
 $isContactPage = $slug === CONTACT_PAGE_SLUG;
-$contactFormType = $isContactPage && (string)($_GET['type'] ?? '') === 'deletion' ? 'deletion' : 'contact';
-$deletionReceipt = $isContactPage ? trim((string)($_GET['receipt'] ?? '')) : '';
-$deletionError = $isContactPage ? trim((string)($_GET['deletion_error'] ?? '')) : '';
-if ($deletionReceipt !== '' || $deletionError !== '') {
-    $contactFormType = 'deletion';
-}
 
 if ($isContactPage && (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')) {
     $rateLimitAllowed = rate_limit_allow('contact_form', 3, 300);
@@ -413,150 +415,77 @@ if ($isContactPage && (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')) {
 
 $contactFormId = $isContactPage && !$contactSuccess ? contact_form_issue_id() : '';
 
+$accessRankingMarker = '__PCF_ACCESS_RANKING__';
+$privacyLinkMarker = '__PCF_PRIVACY_LINK__';
 if ($slug === 'about' || $slug === 'privacy-policy') {
-    $p['body'] = str_replace(
-        ['[サイト名]', '[サイトURL]', '[サイトRSS]', '[アクセスランキング]', '[Privacy Policy(URL付き)]'],
-        [site_setting_get('site.title', site_setting_get('site.name', APP_NAME)), site_setting_get('site.url', app_url()), public_url('feed-60.php'), '__PCF_ACCESS_RANKING__', '__PCF_PRIVACY_POLICY_LINK__'],
-        (string)$p['body']
+    $body = (string)$p['body'];
+    $body = str_replace('[Privacy Policy(URL付き)]ページ', '[Privacy Policy(URL付き)]', $body);
+    $body = str_replace(
+        [public_url('feed.php'), '/feed.php'],
+        [public_url('feed-60.php'), '/feed-60.php'],
+        $body
     );
     $p['body'] = str_replace(
-        [public_url('feed.php'), rtrim(app_url(), '/') . '/feed.php'],
-        public_url('feed-60.php'),
-        (string)$p['body']
+        ['[サイト名]', '[サイトURL]', '[サイトRSS]', '[アクセスランキング]', '[Privacy Policy(URL付き)]'],
+        [site_setting_get('site.title', site_setting_get('site.name', APP_NAME)), site_setting_get('site.url', app_url()), public_url('feed-60.php'), $accessRankingMarker, $privacyLinkMarker],
+        $body
     );
 }
 
-$displayPageTitle = $isContactPage ? 'お問い合わせ・掲載削除依頼' : (string)$p['title'];
-$pageTitle = $isContactPage
-    ? $displayPageTitle
-    : (string)((($p['seo_title'] ?? '') !== '') ? $p['seo_title'] : $p['title']);
+$pageTitle = (string)((($p['seo_title'] ?? '') !== '') ? $p['seo_title'] : $p['title']);
 $pageDescription = (string)($p['seo_description'] ?? '');
 $canonicalUrl = public_url('page.php?slug=' . rawurlencode($slug));
 $ogUrl = $canonicalUrl;
 $pageBodyHtml = nl2br(e((string)$p['body']));
-if ($slug === 'about' || $slug === 'privacy-policy') {
-    $contactHref = e(public_url('page.php?slug=' . rawurlencode(CONTACT_PAGE_SLUG)));
-    $contactLink = '<a href="' . $contactHref . '">お問い合わせ</a>';
-    $privacyHref = e(public_url('page.php?slug=privacy-policy'));
-    $privacyLink = '<a href="' . $privacyHref . '">Privacy Policy</a>';
-    $rankingHtml = $slug === 'about' ? about_access_ranking_html() : '';
-    $pageBodyHtml = str_replace(
-        ['「お問い合わせ」', '【お問い合わせ】にて', '__PCF_PRIVACY_POLICY_LINK__', '__PCF_ACCESS_RANKING__'],
-        ['「' . $contactLink . '」', '【' . $contactLink . '】にて', $privacyLink, $rankingHtml],
-        $pageBodyHtml
-    );
-    $escapedOldPrivacy = e('Privacy Policy（' . public_url('page.php?slug=privacy-policy') . '）');
-    $pageBodyHtml = str_replace($escapedOldPrivacy, $privacyLink, $pageBodyHtml);
-}
 if ($slug === 'about') {
     $pageBodyHtml = str_replace(['&lt;h3&gt;', '&lt;/h3&gt;'], ['<h3>', '</h3>'], $pageBodyHtml);
+}
+if ($slug === 'about' || $slug === 'privacy-policy') {
+    $contactHref = e(public_url('page.php?slug=' . CONTACT_PAGE_SLUG));
+    $privacyHref = e(public_url('page.php?slug=privacy-policy'));
+    $pageBodyHtml = str_replace(e($accessRankingMarker), about_access_ranking_html(), $pageBodyHtml);
+    $pageBodyHtml = str_replace(e($privacyLinkMarker), '<a href="' . $privacyHref . '">Privacy Policy</a>', $pageBodyHtml);
+    $pageBodyHtml = str_replace('こちら「お問い合わせ」', 'こちら「<a href="' . $contactHref . '">お問い合わせ</a>」', $pageBodyHtml);
+    $pageBodyHtml = str_replace('下記の「お問い合わせ」', '下記の「<a href="' . $contactHref . '">お問い合わせ</a>」', $pageBodyHtml);
 }
 
 include __DIR__ . '/partials/header.php';
 ?>
         <section class="block">
-            <h1 class="section-title"><?php echo e($displayPageTitle); ?></h1>
-            <?php if ($isContactPage) : ?>
-                <p>ご用件に応じて、下記からフォームを選択してください。</p>
-            <?php else : ?>
-                <?php echo $pageBodyHtml; ?>
-            <?php endif; ?>
+            <h1 class="section-title"><?php echo e((string)$p['title']); ?></h1>
+            <?php echo $pageBodyHtml; ?>
         </section>
 
         <?php if ($isContactPage) : ?>
             <section class="block">
-                <div class="contact-form-tabs" role="tablist" aria-label="お問い合わせ種別">
-                    <button id="contact-tab-contact" type="button" class="contact-form-tab<?= $contactFormType === 'contact' ? ' is-active' : '' ?>" data-contact-form="contact" role="tab" aria-controls="contact-panel-contact" aria-selected="<?= $contactFormType === 'contact' ? 'true' : 'false' ?>" tabindex="<?= $contactFormType === 'contact' ? '0' : '-1' ?>">一般のお問い合わせ</button>
-                    <button id="contact-tab-deletion" type="button" class="contact-form-tab<?= $contactFormType === 'deletion' ? ' is-active' : '' ?>" data-contact-form="deletion" role="tab" aria-controls="contact-panel-deletion" aria-selected="<?= $contactFormType === 'deletion' ? 'true' : 'false' ?>" tabindex="<?= $contactFormType === 'deletion' ? '0' : '-1' ?>"><span>掲載削除依頼</span><small>本人確認書類が必要</small></button>
-                </div>
-
-                <div id="contact-panel-contact" data-contact-panel="contact" role="tabpanel" aria-labelledby="contact-tab-contact"<?= $contactFormType !== 'contact' ? ' hidden' : '' ?>>
-                    <h2 class="section-title">一般のお問い合わせ</h2>
-                    <p>ご不明な点やご意見・ご要望などをお送りください。</p>
-                    <?php if ($contactSuccess) : ?>
-                        <p class="contact-form-notice is-success">お問い合わせを送信しました。</p>
-                    <?php else : ?>
-                        <?php foreach ($formErrors as $error) : ?>
-                            <p class="contact-form-notice is-error"><?php echo e((string)$error); ?></p>
-                        <?php endforeach; ?>
-                        <form class="contact-form" method="post" action="<?php echo e(public_url('page.php?slug=que')); ?>">
-                            <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
-                            <input type="hidden" name="contact_form_id" value="<?php echo e($contactFormId); ?>">
-                            <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="display:none">
-
-                            <label for="contact-name">氏名（必須）</label>
-                            <input id="contact-name" name="name" value="<?php echo e($contactForm['name']); ?>" maxlength="100" required>
-
-                            <label for="contact-email">メールアドレス（必須）</label>
-                            <input id="contact-email" name="email" type="email" value="<?php echo e($contactForm['email']); ?>" maxlength="254" required>
-
-                            <label for="contact-subject">題名</label>
-                            <input id="contact-subject" name="subject" value="<?php echo e($contactForm['subject']); ?>" maxlength="200" required>
-
-                            <label for="contact-message">内容</label>
-                            <textarea id="contact-message" name="message" rows="10" maxlength="5000" required><?php echo e($contactForm['message']); ?></textarea>
-
-                            <button type="submit">送信</button>
-                        </form>
-                    <?php endif; ?>
-                </div>
-
-                <div id="contact-panel-deletion" data-contact-panel="deletion" role="tabpanel" aria-labelledby="contact-tab-deletion"<?= $contactFormType !== 'deletion' ? ' hidden' : '' ?>>
-                    <h2 class="section-title">掲載削除依頼</h2>
-                    <p>出演者ご本人、正当な代理人または権利者から受け付けます。入力内容と本人確認書類は管理画面・データベースに保存せず、受付用メールにのみ送信します。</p>
-                    <?php if ($deletionReceipt !== '') : ?>
-                        <p class="contact-form-notice is-success">掲載削除依頼を受け付けました。受付番号：<?php echo e($deletionReceipt); ?></p>
-                    <?php elseif ($deletionError !== '') : ?>
-                        <p class="contact-form-notice is-error"><?php echo e($deletionError); ?></p>
-                    <?php endif; ?>
-                    <form class="contact-form" method="post" action="<?php echo e(public_url('deletion_request_submit.php')); ?>" enctype="multipart/form-data">
+                <h2 class="section-title">お問い合わせフォーム</h2>
+                <?php if ($contactSuccess) : ?>
+                    <p>送信しました</p>
+                <?php else : ?>
+                    <?php foreach ($formErrors as $error) : ?>
+                        <p><?php echo e((string)$error); ?></p>
+                    <?php endforeach; ?>
+                    <form class="contact-form" method="post" action="<?php echo e((string)($_SERVER['REQUEST_URI'] ?? '/page.php?slug=que')); ?>">
                         <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
+                        <input type="hidden" name="contact_form_id" value="<?php echo e($contactFormId); ?>">
                         <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="display:none">
 
-                        <label for="deletion-name">お名前（本名・必須）</label>
-                        <input id="deletion-name" name="deletion_name" maxlength="100" placeholder="例：山田 花子" required>
+                        <label for="contact-name">氏名</label>
+                        <input id="contact-name" name="name" value="<?php echo e($contactForm['name']); ?>" maxlength="100" required>
 
-                        <label for="deletion-email">連絡用メールアドレス（必須）</label>
-                        <input id="deletion-email" name="deletion_email" type="email" maxlength="254" placeholder="例：example@example.com" required>
+                        <label for="contact-email">メールアドレス</label>
+                        <input id="contact-email" name="email" type="email" value="<?php echo e($contactForm['email']); ?>" maxlength="254" required>
 
-                        <label for="deletion-phone">電話番号（任意）</label>
-                        <input id="deletion-phone" name="deletion_phone" maxlength="30" placeholder="例：090-1234-5678">
+                        <label for="contact-subject">題名</label>
+                        <input id="contact-subject" name="subject" value="<?php echo e($contactForm['subject']); ?>" maxlength="200" required>
 
-                        <label for="deletion-urls">該当ページURL（必須）</label>
-                        <textarea id="deletion-urls" name="deletion_urls" rows="5" maxlength="5000" placeholder="複数ある場合は1行ずつ全て記載してください" required></textarea>
+                        <label for="contact-message">内容</label>
+                        <textarea id="contact-message" name="message" rows="10" maxlength="5000" required><?php echo e($contactForm['message']); ?></textarea>
 
-                        <label for="identity-document">本人確認書類（必須）</label>
-                        <input id="identity-document" name="identity_document" type="file" accept="image/jpeg,image/png,application/pdf" required>
-                        <small>JPEG・PNG・PDF、5MB以内。受付メールに添付して送信し、当サイトのサーバーには保存しません。</small>
-
-                        <label for="deletion-reason">申請理由（必須）</label>
-                        <textarea id="deletion-reason" name="deletion_reason" rows="8" maxlength="5000" placeholder="削除を希望する理由と経緯をご記入ください" required></textarea>
-
-                        <div class="deletion-consent">
-                            <input id="deletion-consent" type="checkbox" name="deletion_consent" value="1" required>
-                            <label for="deletion-consent">プライバシーポリシーを読み、本人確認書類を提出することに同意します（提出書類は本人確認の目的以外には使用しません）。</label>
-                        </div>
-
-                        <button type="submit">掲載削除依頼を送信する</button>
+                        <button type="submit">送信</button>
                     </form>
-                </div>
+                <?php endif; ?>
             </section>
-            <script>
-            (() => {
-                const tabs = document.querySelectorAll('[data-contact-form]');
-                const panels = document.querySelectorAll('[data-contact-panel]');
-                tabs.forEach((tab) => tab.addEventListener('click', () => {
-                    const type = tab.dataset.contactForm || 'contact';
-                    tabs.forEach((button) => {
-                        const active = button.dataset.contactForm === type;
-                        button.classList.toggle('is-active', active);
-                        button.setAttribute('aria-selected', active ? 'true' : 'false');
-                        button.tabIndex = active ? 0 : -1;
-                    });
-                    panels.forEach((panel) => { panel.hidden = panel.dataset.contactPanel !== type; });
-                }));
-            })();
-            </script>
         <?php endif; ?>
 
 <?php include __DIR__ . '/partials/footer.php'; ?>

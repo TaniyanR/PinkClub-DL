@@ -10,13 +10,13 @@ if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
     exit;
 }
 
-if (auth_user()) {
+if (!analytics_request_is_valid_browser_beacon()) {
     http_response_code(204);
     exit;
 }
 
 $userAgent = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-if (pcf_crawler_guard_is_known_crawler($userAgent)) {
+if (analytics_request_is_automated($userAgent)) {
     http_response_code(204);
     exit;
 }
@@ -45,8 +45,7 @@ try {
         exit;
     }
 
-    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    $ipHash = $ip !== '' ? hash('sha256', $ip . date('Y-m-d')) : null;
+    $ipHash = analytics_visitor_hash($userAgent);
     $ua = mb_substr($userAgent, 0, 255);
 
     $viewStmt = db()->prepare(

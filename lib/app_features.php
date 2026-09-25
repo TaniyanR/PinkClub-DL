@@ -457,12 +457,10 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
             } catch (Throwable) {
             }
         }
-
         $insertWithoutImage->execute($params);
     }
 
     $pdo->prepare('UPDATE rss_sources SET last_fetched_at=NOW() WHERE id=:id')->execute([':id' => $sourceId]);
-
     return ['ok' => true, 'message' => 'updated'];
 }
 
@@ -471,15 +469,8 @@ function rss_table_column_exists(string $table, string $column): bool
     if (!in_array($table, ['rss_sources', 'partner_rss'], true)) {
         return false;
     }
-
     try {
-        $stmt = db()->prepare(
-            'SELECT COUNT(*)
-             FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = :table
-               AND COLUMN_NAME = :column'
-        );
+        $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column');
         $stmt->execute([':table' => $table, ':column' => $column]);
         return (int)$stmt->fetchColumn() > 0;
     } catch (Throwable) {
@@ -520,7 +511,7 @@ function rss_sync_partner_sources(): void
     $seenIds = [];
 
     foreach ($partnerFeeds as $feed) {
-        $feedUrl = rss_http_url((string)($feed['feed_url'] ?? ''));
+        $feedUrl = trim((string)($feed['feed_url'] ?? ''));
         if ($feedUrl === '') {
             continue;
         }
@@ -529,7 +520,7 @@ function rss_sync_partner_sources(): void
             $seenIds[] = $rssId;
         }
         $name = trim((string)($feed['name'] ?? 'RSS'));
-        $enabled = (int)($feed['rss_enabled'] ?? 0) === 1 ? 1 : 0;
+        $enabled = (int)($feed['rss_enabled'] ?? 0) === 1 && rss_http_url($feedUrl) !== '' ? 1 : 0;
         $find->execute([':feed' => $feedUrl]);
         $id = (int)($find->fetchColumn() ?: 0);
         if ($id > 0) {
@@ -588,32 +579,30 @@ function rss_widget_bootstrap(bool $syncSources = true): void
 
 function rss_normalize_url(string $url): string
 {
-    $safe = rss_http_url($url);
-    if ($safe === '') {
+    $trimmed = rss_http_url($url);
+    if ($trimmed === '') {
         return '';
     }
 
-    $parts = parse_url($safe);
+    $parts = parse_url($trimmed);
     if (!is_array($parts)) {
         return '';
     }
 
     $scheme = strtolower((string)($parts['scheme'] ?? ''));
     $host = strtolower((string)($parts['host'] ?? ''));
-    $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
     $path = isset($parts['path']) ? rtrim((string)$parts['path'], '/') : '';
     $query = [];
     parse_str((string)($parts['query'] ?? ''), $query);
     foreach (array_keys($query) as $key) {
-        $normalized = strtolower((string)$key);
-        if (str_starts_with($normalized, 'utm_') || in_array($normalized, ['gclid', 'fbclid'], true)) {
+        $lower = strtolower((string)$key);
+        if (str_starts_with($lower, 'utm_') || in_array($lower, ['gclid', 'fbclid'], true)) {
             unset($query[$key]);
         }
     }
     ksort($query);
-    $queryString = http_build_query($query);
-
-    return $scheme . '|' . $host . $port . '|' . $path . ($queryString !== '' ? '?' . $queryString : '');
+    $normalizedQuery = http_build_query($query);
+    return $scheme . '|' . $host . '|' . $path . ($normalizedQuery !== '' ? '?' . $normalizedQuery : '');
 }
 
 function rss_normalize_display_key(array $item): string
@@ -679,8 +668,8 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
             continue;
         }
 
-        $link = rss_http_url((string)($row['url'] ?? ''));
-        if ($link === '') {
+        $itemLink = rss_http_url((string)($row['url'] ?? ''));
+        if ($itemLink === '') {
             continue;
         }
         $imageUrl = rss_http_url((string)($row['image_url'] ?? ''));
@@ -690,7 +679,7 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
 
         $item = [
             'title' => (string)($row['title'] ?? ''),
-            'link' => $link,
+            'link' => $itemLink,
             'guid' => (string)($row['guid'] ?? ''),
             'published_at' => (string)($row['published_at'] ?? ''),
             'image_url' => $imageUrl,

@@ -11,21 +11,21 @@
   var images = [];
   var activeIndex = 0;
   var returnFocus = null;
-  var savedScrollY = 0;
-  var initialized = false;
 
-  function sampleJsonUrl(url) {
-    try {
-      var parsed = new URL(url, window.location.href);
-      parsed.searchParams.set('format', 'json');
-      return parsed.toString();
-    } catch (error) {
-      return url + (url.indexOf('?') === -1 ? '?' : '&') + 'format=json';
-    }
+  function ensureStylesheet() {
+    if (document.querySelector('link[data-pcf-sample-image-modal]')) return;
+    var cssUrl = document.documentElement.getAttribute('data-sample-image-modal-css');
+    if (!cssUrl) return;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = cssUrl;
+    link.setAttribute('data-pcf-sample-image-modal', '1');
+    document.head.appendChild(link);
   }
 
   function buildModal() {
     if (modal) return;
+    ensureStylesheet();
     modal = document.createElement('div');
     modal.className = 'sample-image-modal';
     modal.setAttribute('aria-hidden', 'true');
@@ -38,7 +38,7 @@
         '</header>' +
         '<div class="sample-image-modal__stage">' +
           '<button type="button" class="sample-image-modal__arrow sample-image-modal__arrow--prev" aria-label="前の画像">‹</button>' +
-          '<img class="sample-image-modal__main" src="" alt="">' +
+          '<img class="sample-image-modal__main" alt="">' +
           '<button type="button" class="sample-image-modal__arrow sample-image-modal__arrow--next" aria-label="次の画像">›</button>' +
           '<p class="sample-image-modal__status" role="status"></p>' +
         '</div>' +
@@ -51,10 +51,6 @@
     statusNode = modal.querySelector('.sample-image-modal__status');
     previousButton = modal.querySelector('.sample-image-modal__arrow--prev');
     nextButton = modal.querySelector('.sample-image-modal__arrow--next');
-
-    mainImage.addEventListener('error', function () {
-      statusNode.textContent = '画像を表示できませんでした。別の画像を選択してください。';
-    });
 
     modal.addEventListener('click', function (event) {
       if (event.target.closest('[data-sample-image-close="1"]')) closeModal();
@@ -94,12 +90,56 @@
     });
   }
 
-  function openModal(trigger) {
-    var url = trigger.dataset.sampleImagesUrl || '';
-    if (!url) return;
+  function normalizeJsonUrl(url) {
+    if (!url) return '';
+    try {
+      var parsed = new URL(url, window.location.href);
+      parsed.searchParams.set('format', 'json');
+      return parsed.toString();
+    } catch (e) {
+      return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'format=json';
+    }
+  }
+
+  function applyImages(payload, trigger) {
+    images = Array.isArray(payload.images) ? payload.images.map(function (imageUrl) {
+      try {
+        return new URL(String(imageUrl || ''), window.location.href).toString();
+      } catch (_) {
+        return '';
+      }
+    }).filter(function (imageUrl) { return /^https?:\/\//i.test(imageUrl); }) : [];
+    titleNode.textContent = payload.title || trigger.dataset.sampleImagesTitle || 'サンプル画像';
+    if (!images.length) return false;
+    renderThumbs();
+    showImage(0);
+    return true;
+  }
+
+  function loadLegacyHtml(url, trigger) {
+    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (response) {
+        if (!response.ok) throw new Error('legacy sample image request failed');
+        return response.text();
+      })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var found = [];
+        doc.querySelectorAll('.sample-frame img, .sample-scroll img, main img').forEach(function (image) {
+          var src = image.getAttribute('src') || '';
+          try {
+            src = new URL(src, url).toString();
+          } catch (_) {}
+          if (/^https?:\/\//i.test(src) && found.indexOf(src) === -1) found.push(src);
+        });
+        var heading = doc.querySelector('h1, h2, title');
+        return applyImages({ images: found, title: heading ? heading.textContent.trim() : '' }, trigger);
+      });
+  }
+
+  function openModal(trigger, url) {
     buildModal();
     returnFocus = trigger;
-    savedScrollY = window.scrollY || window.pageYOffset || 0;
     images = [];
     thumbs.innerHTML = '';
     mainImage.removeAttribute('src');
@@ -112,32 +152,26 @@
     document.body.classList.add('sample-image-modal-open');
     modal.querySelector('.sample-image-modal__close').focus();
 
-    fetch(sampleJsonUrl(url), {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' }
-    })
+    fetch(normalizeJsonUrl(url), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
       .then(function (response) {
         if (!response.ok) throw new Error('sample image request failed');
-        var contentType = response.headers.get('content-type') || '';
-        if (contentType.toLowerCase().indexOf('application/json') === -1) {
-          throw new Error('sample image response was not JSON');
-        }
         return response.json();
       })
       .then(function (payload) {
-        images = Array.isArray(payload.images)
-          ? payload.images.filter(function (urlValue) { return /^https?:\/\//i.test(urlValue); })
-          : [];
-        titleNode.textContent = payload.title || trigger.dataset.sampleImagesTitle || 'サンプル画像';
-        if (!images.length) {
-          statusNode.textContent = '表示できるサンプル画像がありません。';
-          return;
+        if (!applyImages(payload, trigger)) {
+          return loadLegacyHtml(url, trigger).then(function (loaded) {
+            if (!loaded) statusNode.textContent = '表示できるサンプル画像がありません。';
+          });
         }
-        renderThumbs();
-        showImage(0);
       })
       .catch(function () {
-        statusNode.textContent = 'サンプル画像を読み込めませんでした。時間をおいてもう一度お試しください。';
+        loadLegacyHtml(url, trigger)
+          .then(function (loaded) {
+            if (!loaded) statusNode.textContent = '表示できるサンプル画像がありません。';
+          })
+          .catch(function () {
+            statusNode.textContent = 'サンプル画像を読み込めませんでした。時間をおいてもう一度お試しください。';
+          });
       });
   }
 
@@ -147,45 +181,18 @@
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('sample-image-modal-open');
     mainImage.removeAttribute('src');
-    window.scrollTo(0, savedScrollY);
     if (returnFocus) returnFocus.focus();
   }
 
-  function triggerFromEvent(event) {
-    var target = event.target;
-    return target && target.closest ? target.closest('.sample-image-trigger') : null;
-  }
-
-  function handleTriggerClick(event) {
-    var trigger = triggerFromEvent(event);
-    if (!trigger || trigger.disabled || !trigger.dataset.sampleImagesUrl) return;
+  document.addEventListener('click', function (event) {
+    var trigger = event.target.closest('.sample-image-trigger');
+    if (!trigger || trigger.disabled) return;
+    var url = trigger.dataset.sampleImagesUrl || '';
+    if (!url) return;
     event.preventDefault();
-    event.stopPropagation();
-    openModal(trigger);
-  }
-
-  function initializeTriggers() {
-    if (initialized) return;
-    initialized = true;
-
-    Array.prototype.forEach.call(document.querySelectorAll('.sample-image-trigger[data-sample-images-url]'), function (trigger) {
-      trigger.addEventListener('click', handleTriggerClick);
-      trigger.setAttribute('data-sample-image-modal-ready', 'true');
-    });
-
-    // Dynamically inserted cards are handled here; existing cards use their direct listener above.
-    document.addEventListener('click', function (event) {
-      var trigger = triggerFromEvent(event);
-      if (!trigger || trigger.getAttribute('data-sample-image-modal-ready') === 'true') return;
-      handleTriggerClick(event);
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeTriggers);
-  } else {
-    initializeTriggers();
-  }
+    event.stopImmediatePropagation();
+    openModal(trigger, url);
+  }, true);
 
   document.addEventListener('keydown', function (event) {
     if (!modal || !modal.classList.contains('is-open')) return;

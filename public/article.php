@@ -25,7 +25,7 @@ require __DIR__ . '/partials/header.php';
         <h1><?php echo e($article['title']); ?></h1>
         <div class="meta">発売日: <?php echo e($article['release_date'] ?? '未設定'); ?></div>
         <?php if (!empty($article['image_url'])): ?>
-            <p><img src="<?php echo e($article['image_url']); ?>" alt="<?php echo e($article['title']); ?>"></p>
+            <p><img src="<?php echo e($article['image_url']); ?>" alt="<?php echo e($article['title']); ?>" loading="lazy" decoding="async"></p>
         <?php endif; ?>
         <?php if (!empty($article['description'])): ?>
             <p><?php echo nl2br(e($article['description'])); ?></p>
@@ -33,7 +33,7 @@ require __DIR__ . '/partials/header.php';
         <?php if (!empty($article['price'])): ?>
             <p>価格: <?php echo e((string) $article['price']); ?>円</p>
         <?php endif; ?>
-        <p><a href="<?php echo e($article['affiliate_url']); ?>" target="_blank" rel="noopener">DUGA商品ページへ</a></p>
+        <p><a href="<?php echo e($article['affiliate_url']); ?>" target="_blank" rel="noopener sponsored nofollow">DUGA商品ページへ</a></p>
 </article>
 <?php
 require __DIR__ . '/partials/footer.php';
